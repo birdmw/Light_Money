@@ -1,14 +1,3 @@
-this repo is meant to house the exploraiton and data science
-artifacts from looking into pcd.wa.gov
-
-
-https://www.pdc.wa.gov/browse/open-data
-
-
-
-===========BEANSTALK SETUP=============
-https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/create-deploy-python-django.html
-=======================================
 
 # Open virtual environment
 %HOMEPATH%\eb-virt\Scripts\activate

@@ -1,0 +1,136 @@
+<!DOCTYPE html PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+   <HEAD>
+      <TITLE>
+         Going gets tough
+      </TITLE>     
+      
+      <script type = "text/javascript" src = "{{ url_for('static', filename = 'wgo.js/wgo/wgo.js') }}" ></script>
+      
+      <!--<script src = "//raw.githubusercontent.com/waltheri/wgo.js/master/wgo/wgo.min.js" ></script>   --> 
+      <script src = "//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js" ></script>
+   </HEAD>
+<BODY>
+<!-- Dropdown menu for selecting tool -->
+    <select id="tool" style="display: block; margin-bottom: 10px;">
+      <option value="black" selected>Black stone</option>
+      <option value="white">White stone</option>
+      <option value="SQ">Square</option>
+      <option value="TR">Triangle</option>
+      <option value="CR">Circle</option>
+      <option value="remove">Remove</option>
+    </select>
+    
+    
+    <div id="board">
+        <script>
+            var board = new WGo.Board(document.getElementById("board"), {
+                width: 600,    section: {
+        top: -.5,
+        left: -.5,
+        right: -0.5,
+        bottom: -0.5
+    }
+            });
+            
+            
+            var tool = document.getElementById("tool"); // get the <select> element
+
+            board.addEventListener("click", function(x, y) {
+                if(tool.value == "black") {
+                
+
+                
+                    // jQuery code here
+                    $(document).ready(function(){
+                        $.getJSON('/test_fxn', {
+                          "x": x,
+                          "y": y,
+                          "color": tool.value.charAt(0)
+                        }, function(data) {
+                          $("#result").text(data.result);
+                        });
+                      $('#board').hide(x*10).show(y*10);
+                    });
+
+                    board.addObject({
+                        x: x,
+                        y: y,
+                        c: WGo.B
+                    });
+                    
+                    
+                }
+                else if(tool.value == "white") {
+
+                    // jQuery code here
+                    $(document).ready(function(){
+                        $.getJSON('/test_fxn', {
+                          "x": x,
+                          "y": y,
+                          "color": tool.value.charAt(0)
+                        }, function(data) {
+                          $("#result").text(data.result);
+                        });
+                      //$('#board').hide(x*10).show(y*10);
+                    });
+
+                    board.addObject({
+                        x: x,
+                        y: y,
+                        c: WGo.W
+                    });
+                }
+                else if(tool.value == "remove") {
+                    board.removeObjectsAt(x, y);
+                }
+                else {
+                    board.addObject({
+                        x: x,
+                        y: y,
+                        type: tool.value
+                    });
+                }
+            });
+            
+            var coordinates = {
+                // draw on grid layer
+                grid: {
+                    draw: function(args, board) {
+                        var ch, t, xright, xleft, ytop, ybottom;
+                        
+                        this.fillStyle = "rgba(0,0,0,0.7)";
+                        this.textBaseline="middle";
+                        this.textAlign="center";
+                        this.font = board.stoneRadius+"px "+(board.font || "");
+                        
+                        xright = board.getX(-0.75);
+                        xleft = board.getX(board.size-0.25);
+                        ytop = board.getY(-0.75);
+                        ybottom = board.getY(board.size-0.25);
+                        
+                        for(var i = 0; i < board.size; i++) {
+                            ch = i+"A".charCodeAt(0);
+                            if(ch >= "I".charCodeAt(0)) ch++;
+                            
+                            t = board.getY(i);
+                            this.fillText(board.size-i, xright, t);
+                            this.fillText(board.size-i, xleft, t);
+                            
+                            t = board.getX(i);
+                            this.fillText(String.fromCharCode(ch), t, ytop);
+                            this.fillText(String.fromCharCode(ch), t, ybottom);
+                        }
+                        
+                        this.fillStyle = "black";
+                    }
+                }
+            }
+            board.addCustomObject(coordinates);
+            
+        </script>
+    </div>
+    <p id=result></p>
+    
+</BODY>
+</HTML>

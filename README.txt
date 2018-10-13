@@ -41,9 +41,9 @@ deactivate
 eb init -p python-3.6 django-tutorial
 
 # Access Key ID:
-#   AKIAJMBEARQVYBF5EEHA
+#   ********
 # Secret Access Key:
-#   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
+#   ********
 
 # set up some keys
 eb init

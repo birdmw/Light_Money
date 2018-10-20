@@ -1,0 +1,29 @@
+todo: 
+
+make synonym discovery UI 
+  import tkinter
+  python 2.7.11
+  PyQt5
+
+Refactor Code trusting that leaper.py is the definitive
+
+output to sankey diagram
+
+Web UI
+
+Logo
+
+User ownership - can a use say "looks what I discovered"
+
+Name it, & grab the subreddit
+
+make settings file with date entry format
+
+build contract.txt
+
+Task 0: Clear up the AWS hack / create new account
+Task 1: Get elastic Beanstalk Django stack up and running with Bootstrap UI
+Task 2: Ingest data to online database
+Task 3: pipe UI events through to python using jQuery
+
+Capital Flux

@@ -4,7 +4,7 @@ artifacts from looking into https://www.pdc.wa.gov/browse/open-data
 =================
 Two data files in the main directory are static copies of PDC data sets (one is zipped since it exceeded the 25 MB file size limit for github)
 
-The python file currently includes all classes, functions, and a main section which loads the data and does some basic processing.
+The  python file currently includes all classes, functions, and a main section which loads the data and does some basic processing.
 
 
 ===========BEANSTALK SETUP=============

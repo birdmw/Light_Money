@@ -1,0 +1,36 @@
+
+For 2018, the entity [select from list]
+
+contributed [X amount] to candidates and/or PACs [click for full direct donation list with amounts]
+
+Their direct candidate spending was 
+[Z amount], [X%] to [Party 1] 
+[Q amount], [Y%] to [Party 2]
+...
+[click for full candidate list with amounts]
+
+
+Their candidate spending including through PACs (not including IEs) was
+[M%] to [Party 1]
+[N%] to [Party 2]
+...
+
+Their candidate spending including through PACs and IEs was
+[M%] to [Party 1]
+[N%] to [Party 2]
+...
+
+
+Their spending on ballot measures was
+Measure 1 [A%] For / [B%] Against
+...
+
+
+Considering only spending in the 2016 election cycle, candidates supported by this entity (including through PACs and IEs) voted this way:
+Issue 1 (bill number ZZZZ):  [C%] For / [D%] Against, (or [E%] For / [F%] Against weighted by amount of spending)
+Issue 2 ...
+
+
+
+
+

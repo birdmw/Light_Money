@@ -473,11 +473,11 @@ if __name__ == '__main__':
 
     print(time.time())
     print("Read in and process IE data")
-    data_ie = load_ie_data('Independent_Campaign_Expenditures_and_Electioneering_Communications.csv')
+    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications.csv')
 
     print(time.time())
     print("Read in and process PAC/Candidate data")
-    data_pac = load_pac_data('Contributions_to_Candidates_and_Political_Committees.csv')
+    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees.csv',nrows=100)
     # data_pac = load_pac_data('small test data.csv')
     print('We can ignore the DtypeWarning about columns (11,23) because those are not used.')
 

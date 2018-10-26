@@ -177,16 +177,17 @@ class Data():
         new_donor.aliases = donor_list
         new_donor.type = first_donor.type
         new_donor.filer_id = first_donor.filer_id
-        # TODO: Remove donors/receivers from money_in/money_out which are in donor_list
         new_donor.money_in = first_donor.money_in
         new_donor.money_out = first_donor.money_out
         new_donor.has_resolved = False
 
         for i in donor_list[1:]:
             temp = self.all_donors.pop(i)  # will raise error if i is not a valid key
-            # TODO: Remove donors/receivers from money_in/money_out which are in donor_list
             new_donor.money_in = new_donor.money_in.append(temp.money_in)
             new_donor.money_out = new_donor.money_out.append(temp.money_out)
+        # Remove donors/receivers from money_in/money_out which are in donor_list, then sum_donations again
+        new_donor.money_in = new_donor.money_in.loc[~new_donor.money_in.donor.isin(donor_list), :]
+        new_donor.money_out = new_donor.money_out.loc[~new_donor.money_out.receiver.isin(donor_list), :]
         new_donor.sum_donations()
         self.all_donors[new_donor.name] = new_donor
         # Now we have to follow through to everyone in money_in and money_out and update them to the new donor name
@@ -331,7 +332,7 @@ def load_ie_data(filename):
     return data1
 
 
-def load_pac_data(filename, nrows=0):
+def load_pac_data(filename, nrows=0, debug=True):
     # filename is the name of the data file to load
     # nrows: if 0, load all data; if >0, only load first nrows
     # check if file exists, if so load it
@@ -341,7 +342,8 @@ def load_pac_data(filename, nrows=0):
     my_cols = ['filer_id', 'type', 'filer_name', 'party', 'ballot_number', 'for_or_against', 'amount', 'code',
                'contributor_name', 'contributor_address', 'contributor_city', 'contributor_zip']
     campdata = campdata[my_cols]
-    print(campdata.shape)
+    if debug:
+        print(campdata.shape)
     # note filer_id values in this file do not match the filer_id values in the IE data file
     # the for_or_against value is merely descriptive of ballot committees here, it does not indicate spending against a candidate
     # convert amount str to float
@@ -350,7 +352,8 @@ def load_pac_data(filename, nrows=0):
 
     # exclude rows with amount <= 0
     campdata = campdata.loc[(campdata.loc[:, 'amount'] > 0), :]
-    print(campdata.shape)
+    if debug:
+        print(campdata.shape)
 
     # drop rows from Individual donors (for now, since interest is mostly in PACs)
     # TODO: include individuals with notably large donations, e.g. over $20,000
@@ -382,8 +385,8 @@ def load_pac_data(filename, nrows=0):
         this_receiver_type = this_row['type']
         if pd.isna(this_receiver_type):
             this_receiver_type = 'None'
-        this_receiver_party = this_row[
-            'party']  # this will be NaN for ballot measures and PACs, and the nans can break stuff
+        this_receiver_party = this_row['party']
+        # this_reciever_party will be NaN for ballot measures and PACs, and the nans can break stuff
         if pd.isna(this_receiver_party):
             this_receiver_party = 'None'
         this_amount = this_row['amount']
@@ -393,10 +396,8 @@ def load_pac_data(filename, nrows=0):
             # check if we have seen this candidate before
             if this_receiver_name in data2.all_candidates:
                 # if so, add to that candidate data
-                # this_cand = data2.all_candidates[this_receiver_id]
                 this_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                         columns=['donor', 'donor_id', 'amount'])
-                # this_cand.money_in =
                 data2.all_candidates[this_receiver_name].money_in = data2.all_candidates[
                     this_receiver_name].money_in.append(this_add)
             # todo: check that this_cand.party = this_receiver_party
@@ -416,8 +417,6 @@ def load_pac_data(filename, nrows=0):
             # check if donor already exists
             if this_giver_name in data2.all_donors:
                 # if so, add to that donor data
-                # this_donor = data2.all_donors[this_giver_name]
-                # todo: check this_giver_name against ids and use id instead
                 this_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                         columns=["receiver", "amount", "party", "type"])
                 data2.all_donors[this_giver_name].money_out = data2.all_donors[this_giver_name].money_out.append(
@@ -432,12 +431,12 @@ def load_pac_data(filename, nrows=0):
                 new_donor.money_out = new_donor.money_out.append(new_add)
                 data2.all_donors[this_giver_name] = new_donor
         else:  # receiver type is not Candidate, should only be Political Committee
-            if this_receiver_name in data2.all_donors:  # check if we have seen this pac before (maybe as a donor) and update data
+            # check if we have seen this pac before (maybe as a donor) and update data
+            if this_receiver_name in data2.all_donors:
                 this_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                         columns=['donor', 'donor_id', 'amount'])
                 data2.all_donors[this_receiver_name].money_in = data2.all_donors[this_receiver_name].money_in.append(
                     this_add)
-            # todo: check that this_cand.party = this_receiver_party
             else:
                 # create new pac and add to data
                 new_pac = Donor()
@@ -452,8 +451,6 @@ def load_pac_data(filename, nrows=0):
             # check if donor already exists
             if this_giver_name in data2.all_donors:
                 # if so, add to that donor data
-                # this_donor = data2.all_donors[this_giver_name]
-                # todo: check this_giver_name against ids and maybe use id instead?
                 this_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                         columns=["receiver", "amount", "party", "type"])
                 data2.all_donors[this_giver_name].money_out = data2.all_donors[this_giver_name].money_out.append(
@@ -469,29 +466,27 @@ def load_pac_data(filename, nrows=0):
                 data2.all_donors[this_giver_name] = new_donor
 
     end = time.time()
-    print(end - start)
-    print(len(data2.all_donors.keys()))
+    if debug:
+        print(end - start)
+        print(len(data2.all_donors.keys()))
     return data2
 
 
 if __name__ == '__main__':
     print("Running Main")
 
-    print(time.time())
     print("Read in and process IE data")
-    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications.csv')
+    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181026.csv')
 
-    print(time.time())
     print("Read in and process PAC/Candidate data")
-    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees.csv')
+    print('If there is a DtypeWarning about columns (11,23) we can ignore it')
+    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181026.csv')
     # data_pac = load_pac_data('small test data.csv')
-    print('We can ignore the DtypeWarning about columns (11,23) because those are not used.')
 
     print(time.time())
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
     data_ie.sum_donations()
     data_pac.sum_donations()
-    print(time.time())
 
     # print("Resolve donations to track all donations through to final candidate/ballot issue")
     #

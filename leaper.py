@@ -177,25 +177,31 @@ class Data():
         new_donor.aliases = donor_list
         new_donor.type = first_donor.type
         new_donor.filer_id = first_donor.filer_id
+        # TODO: Remove donors/receivers from money_in/money_out which are in donor_list
         new_donor.money_in = first_donor.money_in
         new_donor.money_out = first_donor.money_out
         new_donor.has_resolved = False
 
         for i in donor_list[1:]:
             temp = self.all_donors.pop(i)  # will raise error if i is not a valid key
+            # TODO: Remove donors/receivers from money_in/money_out which are in donor_list
             new_donor.money_in = new_donor.money_in.append(temp.money_in)
             new_donor.money_out = new_donor.money_out.append(temp.money_out)
         new_donor.sum_donations()
         self.all_donors[new_donor.name] = new_donor
         # Now we have to follow through to everyone in money_in and money_out and update them to the new donor name
-        for i in new_donor.money_out['receiver']:
-            if new_donor.money_out.loc[new_donor.money_out['receiver']==i,'type']=='Candidate':
+        # first screen out any donations within the synonym set itself
+        all_receivers = [x for x in new_donor.money_out['receiver'] if x not in donor_list]
+        for i in all_receivers:
+            if new_donor.money_out.loc[new_donor.money_out['receiver']==i,'type'].tolist()[0]=='Candidate':
                 for j in donor_list:
                     self.all_candidates[i].money_in.loc[self.all_candidates[i].money_in.loc[:,'donor'] == j,'donor'] = donor_list[0]
             else:
                 for j in donor_list:
                     self.all_donors[i].money_in.loc[self.all_donors[i].money_in.loc[:,'donor'] == j,'donor'] = donor_list[0]
-        for i in new_donor.money_in['donor']:
+        # screen out any donations within the synonym set itself
+        all_givers = [x for x in new_donor.money_in['donor'] if x not in donor_list]
+        for i in all_givers:
             #no candidates will be donors to this pac, so don't have to check type
             for j in donor_list:
                 self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = donor_list[0]
@@ -477,7 +483,7 @@ if __name__ == '__main__':
 
     print(time.time())
     print("Read in and process PAC/Candidate data")
-    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees.csv',nrows=100)
+    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees.csv')
     # data_pac = load_pac_data('small test data.csv')
     print('We can ignore the DtypeWarning about columns (11,23) because those are not used.')
 
@@ -487,15 +493,15 @@ if __name__ == '__main__':
     data_pac.sum_donations()
     print(time.time())
 
-    print("Resolve donations to track all donations through to final candidate/ballot issue")
-
-    print(len(data_pac.all_donors.keys()))
-    start = time.time()
+    # print("Resolve donations to track all donations through to final candidate/ballot issue")
+    #
+    # print(len(data_pac.all_donors.keys()))
+    # start = time.time()
+    # # for i in range(len(data_pac.all_donors.keys())):
     # for i in range(len(data_pac.all_donors.keys())):
-    for i in range(len(data_pac.all_donors.keys())):
-        data_pac.all_donors[data_pac.all_donors.keys()[i]].resolve_donations(data_pac)
-    end = time.time()
-    print(end - start)
+    #     data_pac.all_donors[data_pac.all_donors.keys()[i]].resolve_donations(data_pac)
+    # end = time.time()
+    # print(end - start)
 
     print("Not shown: Data.combine_donors to combine records with different spellings of a donor name into one record")
     print(' ')

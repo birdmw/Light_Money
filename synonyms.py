@@ -49,7 +49,8 @@ syn_microsoft = ['MICROSOFT PAC',
                  'MICROSOFT POLITICAL ACTION COMMITTEE',
                  'MICROSOFT CORPORATION']
 
-syn_amazon = ['AMAZON.COM SERVICES INC.',
+syn_amazon = ['AMAZON.COM',
+              'AMAZON.COM SERVICES INC.',
               'AMAZON SERVICES, INC.',
               'AMAZON.COM SERVICES, INC.',
               'AMAZON.COM SERVICES',
@@ -62,7 +63,6 @@ syn_amazon = ['AMAZON.COM SERVICES INC.',
               'AMAZON FULFILLMENT SERVICES, INC.',
               'AMAZON.COM INC.',
               'AMAZON',
-              'AMAZON.COM',
               'AMAZON FULFILLMENT SERVICE INC',
               'AMAZON.COM SERVICES, INC',
               'AMAZON FULFILLMENT SERVICES',
@@ -127,4 +127,6 @@ data_pac.combine_donors(syn_microsoft)
 data_pac.combine_donors(syn_values)
 data_pac.combine_donors(syn_anheuser)
 data_pac.combine_donors(syn_naiop)
+data_pac.combine_donors(syn_enterprise_wa)
+data_pac.combine_donors(syn_enterprise_holdings)
 

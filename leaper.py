@@ -208,6 +208,32 @@ class Data():
                 self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = donor_list[0]
 
 
+def merge_ie_pac(donor_ie, data2, donor_key)
+    # donor_ie is an IE donor (a Donor object)
+    # data2 is a full dataset (a Data object) into which donor_ie will be merged
+    # donor_key is the key in data2 to merge into - data2.all_donors[donor_key]
+    #
+    # ie data has no money_in, so just get donor_ie.money_out and merge with data2.all_donors[donor_key].money_out
+    # then get all recipients donor_ie.money_out.loc[:,'receiver'] and update in data2.all_candidates
+    #
+    data2.all_donors[donor_key].money_out = data2.all_donors[donor_key].money_out.append(donor_ie.money_out)
+    cand_receivers = [i for i in donor_ie.money_out['receiver'] if donor_ie.money_out['type']=='Candidate' ]
+    ballot_receivers = [i for i in donor_ie.money_out['receiver'] if donor_ie.money_out['type'] == 'Ballot']
+    # todo: make sure for statements skip quietly if iteration set is empty
+    for i in cand_receivers:
+        # check if candidate exists in data2.all_candidates - if so append donation, if not create it and add donation
+        # data2.all_candidates.keys()
+        # todo: code here
+        pass
+    for i in ballot_receivers:
+        # check if pac exists in data2.all_donors - if so append donation, if not create it and add donation
+        # should scrutinize name closely - any ballot committee should already exist in the larger pac dataset,
+        # might need to merge pacs if the name is not found
+        # data2.all_donors.keys()
+        # todo: code here
+        pass
+
+
 
 # Save and Load functions
 # Usage:
@@ -232,6 +258,11 @@ def load_from_file(filename='data.pkl'):
 def load_ie_data(filename):
     # check if file exists, if so load it
     iedata = pd.read_csv(filename)
+    # todo: screen out 2017 election year data
+    # we can't screen by election year for ie data; they only report calendar year
+    # we need to get all donations from 2017 which were used for 2018 election year
+    # so we have to screen out spending which was done in 2017
+
     my_cols = ['origin', 'sponsor_id', 'sponsor_name', 'candidate_last_name', 'candidate_first_name', 'candidate_party',
                'ballot_name', 'ballot_number', 'portion_of_amount', 'for_or_against']
     # drop all columns except my_cols

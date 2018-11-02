@@ -64,7 +64,7 @@ class Donor():
         n_donations = len(self.money_out)
         # check if money_out is empty
         if n_donations < 1:
-            self.money_out_resolved = pd.DataFrame([[self.name, 0.0, "No Party", 'Terminal PAC', 1.0]],
+            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), "No Party", 'Terminal PAC', 1.0]],
                                                    columns=["receiver", "amount", "party", "type", "proportion"])
             # mark self as resolved
             self.has_resolved = True
@@ -83,6 +83,9 @@ class Donor():
                                         columns=["receiver", "amount", "party", "type", "proportion"])
                 self.money_out_resolved = self.money_out_resolved.append(this_add)
             else:
+                # this_amount can only be negative for a candidate (for IE spending against)
+                if this_amount<0:
+                    raise ValueError('in resolve_donations: this_amount should not be negative for a PAC')
                 # look up the pac that this money went to
                 if this_receiver in fulldata.all_donors:
                     # check if this donation is to self
@@ -92,7 +95,7 @@ class Donor():
                         print('Recursion loop: Ignoring donation to self by '+self.name)
                         # if this is the only donation then this is a terminal PAC, so set money_out_resolved and return
                         if (self.money_out_resolved.empty)&(i==(n_donations-1)):
-                            self.money_out_resolved = pd.DataFrame([[self.name, 0.0, "No Party", 'Terminal PAC', 1.0]],
+                            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), "No Party", 'Terminal PAC', 1.0]],
                                                                    columns=["receiver", "amount", "party", "type",
                                                                             "proportion"])
                             # mark self as resolved
@@ -104,12 +107,23 @@ class Donor():
                     # get money_out_resolved
                     pac_resolved = fulldata.all_donors[this_receiver].money_out_resolved
                     # allocate this_amount by proportion to candidates in pac_resolved
-                    # TODO: max proportion must be limited to reflect amount going to candidate - see next comment
+                    #
                     # Suppose PAC 1 gives $1000 to PAC 2. PAC 2 give $10 to Candidate A, and no other donations.
                     # Then PAC 2 resolved shows $10, 100% to Candidate A.
-                    # Then PAC 1 resolved shows $1000 * 100% = $1000 to Candidate A
+                    # Then PAC 1 resolved should not show $1000 * 100% = $1000 to Candidate A
                     # Must limit to $10.
+                    #
+                    # Resolve donations based on proportions of outgoing donations:
                     amount_resolved = this_amount * pac_resolved.loc[:, 'proportion']
+                    # Adjust based on proportion of money_in:
+                    prop_in = this_amount / fulldata.all_donors[this_receiver].money_in.amount.sum()
+                    amount_resolved = prop_in * amount_resolved
+                    if prop_in>1:
+                        raise ValueError('in resolve_donations: this_amount greater than sum of money_in')
+                    # Limit amount_resolved to the amount that was spent (elementwise):
+                    if any( abs(pac_resolved.loc[:, 'amount'])<abs(amount_resolved) ):
+                        temp_filter = ((amount_resolved>=0)*2)-1 # save the signs of each element
+                        amount_resolved = temp_filter*(amount_resolved.abs().combine(abs(pac_resolved.loc[:, 'amount']),min))
                     # construct DataFrame from pac_resolved and amount_resolved (proportion will be computed later)
                     this_add = pac_resolved.copy()
                     this_add.loc[:, 'amount'] = amount_resolved
@@ -122,14 +136,15 @@ class Donor():
                                             columns=["receiver", "amount", "party", "type", "proportion"])
                     self.money_out_resolved = self.money_out_resolved.append(this_add)
         # note resolution may have many intermediate pacs donating to the same candidates, so have to sum again
-        # note if negative and positive donations to same candidate, these will cancel out in sum
+        # TODO: if negative and positive donations to same candidate, these will cancel out in sum
         self.money_out_resolved = pd.DataFrame(
             self.money_out_resolved.groupby(["receiver", "party", "type", "proportion"]).sum()).reset_index()
         # when all donations have been resolved
         # get total donation amount and divide to obtain proportion for each candidate
-        # must use abs() in case an amount is negative (e.g. from an IE)
+        # use abs() in denominator since amounts can be negative (e.g. from an IE)
+        # no abs() in numerator since we want to preserve sign in the proportion
         self.money_out_resolved.loc[:, 'proportion'] = self.money_out_resolved.loc[:,
-                                                       'amount'].abs() / self.money_out_resolved.loc[:, 'amount'].abs().sum()
+                                                       'amount'] / self.money_out_resolved.loc[:, 'amount'].abs().sum()
         # mark self as resolved
         self.has_resolved = True
         # print('Resolved with donations')
@@ -578,10 +593,9 @@ if __name__ == '__main__':
     end = time.time()
     print(end - start)
 
-    print("Not shown: Data.combine_donors to combine records with different spellings of a donor name into one record")
     print(' ')
     print('Example of money spent by one donor:')
-    print(data_pac.all_donors[data_pac.all_donors.keys()[3]].money_out)
-    print(data_pac.all_donors[data_pac.all_donors.keys()[3]].money_out_resolved)
+    print(data_pac.all_donors['WA REALTORS PAC'].money_out)
+    print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
 
     # save_to_file(data_pac, 'data_pac.pkl')

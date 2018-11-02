@@ -7,6 +7,8 @@ import time as time
 from pandas.api.types import is_string_dtype
 import cPickle as pickle
 from collections import OrderedDict
+from manual_corrections import party_correction
+from synonyms import do_synonyms
 
 # use cases:
 # 1. search by contributor & summarize by party
@@ -47,8 +49,8 @@ class Donor():
             self.money_out = pd.DataFrame(self.money_out.groupby(['receiver', 'party', 'type']).sum()).reset_index()
         if (len(self.money_in) > 1):
             self.money_in = pd.DataFrame(self.money_in.groupby(['donor', 'donor_id']).sum()).reset_index()
-        self.total_in = self.money_in['amount'].sum()
-        self.total_out = self.money_out['amount'].sum()
+        self.total_in = self.money_in['amount'].abs().sum()
+        self.total_out = self.money_out['amount'].abs().sum()
         return
 
     def resolve_donations(self, fulldata, refresh = False):
@@ -56,9 +58,10 @@ class Donor():
         # then throw error due to loop in donations
         if (self.has_resolved == True)&(refresh==False):
             return
+        # reset the money_out_resolved dataframe
+        self.money_out_resolved = pd.DataFrame(columns=["receiver", "amount", "party", "type", "proportion"])
+        # get number of donations to resolve
         n_donations = len(self.money_out)
-        # print(self.name)
-        # print(n_donations)
         # check if money_out is empty
         if n_donations < 1:
             self.money_out_resolved = pd.DataFrame([[self.name, 0.0, "No Party", 'Terminal PAC', 1.0]],
@@ -145,7 +148,7 @@ class Candidate():
         # group donations by donor so there is one line per donor with a total from that donor
         if (len(self.money_in) > 1):
             self.money_in = pd.DataFrame(self.money_in.groupby(['donor', 'donor_id']).sum()).reset_index()
-        self.total_in = self.money_in['amount'].sum()
+        self.total_in = self.money_in['amount'].abs().sum()
 
 
 class Data():
@@ -169,6 +172,7 @@ class Data():
         # check if all strings in donor_list are valid keys in self.all_donors
         if not set(donor_list).issubset(self.all_donors.keys()):
             print('combine_donors error: donor_list contains invalid key(s)')
+            print(set(donor_list)-set(self.all_donors.keys()))
             return
         # first item in donor_list will be the new key
         first_donor = self.all_donors.pop(donor_list[0])
@@ -185,6 +189,10 @@ class Data():
             temp = self.all_donors.pop(i)  # will raise error if i is not a valid key
             new_donor.money_in = new_donor.money_in.append(temp.money_in)
             new_donor.money_out = new_donor.money_out.append(temp.money_out)
+            # check if donor has established a type yet
+            # when we get to a donor created by that donor's report in the original data (instead of created by the receiver's report), then it will have a non-blank party
+            if new_donor.type ==' ':
+                new_donor.type = temp.type
         # Remove donors/receivers from money_in/money_out which are in donor_list, then sum_donations again
         new_donor.money_in = new_donor.money_in.loc[~new_donor.money_in.donor.isin(donor_list), :]
         new_donor.money_out = new_donor.money_out.loc[~new_donor.money_out.receiver.isin(donor_list), :]
@@ -203,12 +211,12 @@ class Data():
         # screen out any donations within the synonym set itself
         all_givers = [x for x in new_donor.money_in['donor'] if x not in donor_list]
         for i in all_givers:
-            #no candidates will be donors to this pac, so don't have to check type
+            # no candidates will be donors to this pac, so don't have to check type
             for j in donor_list:
                 self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = donor_list[0]
 
 
-def merge_ie_pac(donor_ie, data2, donor_key)
+def merge_ie_pac(donor_ie, data2, donor_key):
     # donor_ie is an IE donor (a Donor object)
     # data2 is a full dataset (a Data object) into which donor_ie will be merged
     # donor_key is the key in data2 to merge into - data2.all_donors[donor_key]
@@ -234,8 +242,15 @@ def merge_ie_pac(donor_ie, data2, donor_key)
         pass
 
 
+def output_dataframe(this_data):
+    pass
+# this_data is a Data() object
+# main output is money_out_resolved dataframe from every donor and every candidate
+# this_data.all_donors[i].money_out_resolved
 
-# Save and Load functions
+
+################################
+# Save and Load functions for intermediate data
 # Usage:
 # save_to_file(data2,'data2.pickle')
 # data2 = load_from_file('data2.pickle')
@@ -329,9 +344,9 @@ def load_ie_data(filename):
                                     columns=['donor', 'donor_id', 'amount'])
             data1.all_candidates[this_receiver_name].money_in = data1.all_candidates[
                 this_receiver_name].money_in.append(this_add)
-        # this_cand.money_in = this_cand.money_in.append(this_add)
         # todo: check that this_cand.party = this_receiver_party
-        # data1.all_candidates[this_receiver_name] = this_cand
+        # what to do if they are different?
+        # data1.all_candidates[this_receiver_name].party = this_receiver_party
 
         else:
             # create new candidate and add to data
@@ -417,7 +432,7 @@ def load_pac_data(filename, nrows=0, debug=True):
         if pd.isna(this_receiver_type):
             this_receiver_type = 'None'
         this_receiver_party = this_row['party']
-        # this_reciever_party will be NaN for ballot measures and PACs, and the nans can break stuff
+        # this_receiver_party will be NaN for ballot measures and PACs, and the nans can break stuff
         if pd.isna(this_receiver_party):
             this_receiver_party = 'None'
         this_amount = this_row['amount']
@@ -468,6 +483,10 @@ def load_pac_data(filename, nrows=0, debug=True):
                                         columns=['donor', 'donor_id', 'amount'])
                 data2.all_donors[this_receiver_name].money_in = data2.all_donors[this_receiver_name].money_in.append(
                     this_add)
+                # if we have only seen this pac before as a donor, then we don't have a value for type and filer_id
+                if data2.all_donors[this_receiver_name].type != this_receiver_type:
+                    data2.all_donors[this_receiver_name].type = this_receiver_type
+                    data2.all_donors[this_receiver_name].filer_id = this_receiver_id
             else:
                 # create new pac and add to data
                 new_pac = Donor()
@@ -519,15 +538,40 @@ if __name__ == '__main__':
     data_ie.sum_donations()
     data_pac.sum_donations()
 
-    # print("Resolve donations to track all donations through to final candidate/ballot issue")
-    #
-    # print(len(data_pac.all_donors.keys()))
-    # start = time.time()
-    # # for i in range(len(data_pac.all_donors.keys())):
-    # for i in range(len(data_pac.all_donors.keys())):
-    #     data_pac.all_donors[data_pac.all_donors.keys()[i]].resolve_donations(data_pac)
-    # end = time.time()
-    # print(end - start)
+    print("Make manual corrections to align party with a candidate's caucus")
+    party_correction(data_pac)
+
+    print('Combine donors which are actually synonyms of a single donor')
+    do_synonyms(data_pac)
+
+    print("Resolve donations to track all donations through to final candidate/ballot issue (selected entities only)")
+
+    # define list of donors of interest
+    # these have been manually vetted to combine many spellings of donor name,
+    # but their recipients may still need some work
+    donors_interest = ['WA REALTORS PAC',
+                       'COCA COLA NORTH AMERICA',
+                       'PEPSI COLA NW BUSINESS UNIT',
+                       'DR PEPPER SNAPPLE GROUP',
+                       'ANHEUSER BUSCH CO.',
+                       'BOEING COMPANY',
+                       'BOEING EMPLOYEES CREDIT UNION',
+                       'ANDEAVOR',
+                       'PHILLIPS 66',
+                       'AMERICAN FUEL AND PETROCHEMICAL MANUFACTURERS',
+                       'BP AMERICA',
+                       'BP AMERICA EMPLOYEE PAC',
+                       'WEYERHAEUSER CO',
+                       'KOCH INDUSTRIES, INC.',
+                       'WASHINGTON EDUCATION ASSOCIATION',
+                       'MUCKLESHOOT INDIAN TRIBE']
+
+    start = time.time()
+    # for i in data_pac.all_donors.keys(): # for processing all donors
+    for i in donors_interest:
+        data_pac.all_donors[i].resolve_donations(data_pac, refresh=True)
+    end = time.time()
+    print(end - start)
 
     print("Not shown: Data.combine_donors to combine records with different spellings of a donor name into one record")
     print(' ')

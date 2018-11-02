@@ -104,6 +104,11 @@ class Donor():
                     # get money_out_resolved
                     pac_resolved = fulldata.all_donors[this_receiver].money_out_resolved
                     # allocate this_amount by proportion to candidates in pac_resolved
+                    # TODO: max proportion must be limited to reflect amount going to candidate - see next comment
+                    # Suppose PAC 1 gives $1000 to PAC 2. PAC 2 give $10 to Candidate A, and no other donations.
+                    # Then PAC 2 resolved shows $10, 100% to Candidate A.
+                    # Then PAC 1 resolved shows $1000 * 100% = $1000 to Candidate A
+                    # Must limit to $10.
                     amount_resolved = this_amount * pac_resolved.loc[:, 'proportion']
                     # construct DataFrame from pac_resolved and amount_resolved (proportion will be computed later)
                     this_add = pac_resolved.copy()

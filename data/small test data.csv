@@ -11,7 +11,7 @@ id,report_number,origin,filer_id,type,filer_name,first_name,middle_initial,last_
 10,10,C3,a111,Political Committee,A House Caucus,,,,,,,,,,,,,,40000,,,,,,Political Action Committee,PAC 333,,,,,,,,,,
 11,11,C3,zz1700,Political Committee,NO on 1700 Committee,,,,,,,,1700,Against,,,,,20000,,,,,,Political Action Committee,PAC 333,,,,,,,,,,
 12,12,C3,b222,Political Committee,B House Caucus,,,,,,,,,,,,,,40000,,,,,,Political Action Committee,PAC 333,,,,,,,,,,
-13,13,C3,b222,Political Committee,B House Caucus,,,,,,,,,,,,,,50000,,,,,,Political Action Committee,PAC 222,,,,,,,,,,
+13,13,C3,b222,Political Committee,B House Caucus,,,,,,,,,,,,,,20000,,,,,,Political Action Committee,PAC 222,,,,,,,,,,
 14,14,C3,qqq4,Political Committee,PAC 444,,,,,,,,,,,,,,40000,,,,,,Political Action Committee,PAC 222,,,,,,,,,,
 15,15,C3,BBB 123,Candidate,Candidate B,,,,,,,REPUBLICAN,,,,,,,2000,,,,,,Political Action Committee,PAC 222,,,,,,,,,,
 16,16,C3,BBB 123,Candidate,Candidate B,,,,,,,REPUBLICAN,,,,,,,5000,,,,,,Caucus,B House Caucus,,,,,,,,,,

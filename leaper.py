@@ -53,10 +53,11 @@ class Donor():
         self.total_out = self.money_out['amount'].abs().sum()
         return
 
-    def resolve_donations(self, fulldata, refresh = False):
+    def resolve_donations(self, fulldata):
         # need to check recursion problems - if called recursively on a pac which is already calling it,
         # then throw error due to loop in donations
-        if (self.has_resolved == True)&(refresh==False):
+        print(self.name)
+        if (self.has_resolved == True):
             return
         # reset the money_out_resolved dataframe
         self.money_out_resolved = pd.DataFrame(columns=["receiver", "amount", "party", "type", "proportion"])
@@ -115,15 +116,40 @@ class Donor():
                     #
                     # Resolve donations based on proportions of outgoing donations:
                     amount_resolved = this_amount * pac_resolved.loc[:, 'proportion']
-                    # Adjust based on proportion of money_in:
-                    prop_in = this_amount / fulldata.all_donors[this_receiver].money_in.amount.sum()
-                    amount_resolved = prop_in * amount_resolved
-                    if prop_in>1:
+                    # Adjust based on proportion of money_in, but not if the PAC must have had a starting balance
+                    if fulldata.all_donors[this_receiver].total_in>=fulldata.all_donors[this_receiver].total_out:
+                        prop_in = this_amount / fulldata.all_donors[this_receiver].money_in.amount.sum()
+                    else:
+                        prop_in = 1.0
+                    #amount_resolved = prop_in * amount_resolved
+                    if prop_in>1.0:
                         raise ValueError('in resolve_donations: this_amount greater than sum of money_in')
                     # Limit amount_resolved to the amount that was spent (elementwise):
-                    if any( abs(pac_resolved.loc[:, 'amount'])<abs(amount_resolved) ):
+                    if any( (prop_in*abs(pac_resolved.loc[:, 'amount']))<(0.9999*abs(amount_resolved) )):
                         temp_filter = ((amount_resolved>=0)*2)-1 # save the signs of each element
-                        amount_resolved = temp_filter*(amount_resolved.abs().combine(abs(pac_resolved.loc[:, 'amount']),min))
+                        #expanding this to debug
+                        amount_resolved_index = amount_resolved.index
+                        temp1 = prop_in * pac_resolved.loc[:, 'amount']
+                        temp2 = temp1.abs()
+                        print(' ')
+                        print(self.money_out)
+                        print(self.money_in)
+                        print(prop_in)
+                        print(this_amount)
+                        print(this_receiver)
+                        print(i)
+                        print(amount_resolved)
+                        print(temp1)
+                        print(amount_resolved.index)
+                        print(temp1.index)
+
+                        temp3 = amount_resolved.abs()
+                        #temp2.index = amount_resolved_index
+                        temp4 = pd.concat([temp3,temp2],axis=1).min(axis=1)
+                        temp5 = temp_filter*temp4
+                        amount_resolved = temp5
+                        print(temp5)
+                        # amount_resolved = temp_filter*(amount_resolved.abs().combine(abs(prop_in*pac_resolved.loc[:, 'amount']),min))
                     # construct DataFrame from pac_resolved and amount_resolved (proportion will be computed later)
                     this_add = pac_resolved.copy()
                     this_add.loc[:, 'amount'] = amount_resolved
@@ -139,6 +165,15 @@ class Donor():
         # TODO: if negative and positive donations to same candidate, these will cancel out in sum
         self.money_out_resolved = pd.DataFrame(
             self.money_out_resolved.groupby(["receiver", "party", "type", "proportion"]).sum()).reset_index()
+        # if this pac is reporting more money_in than money_out, then record it as unspent
+        amount_balance = self.money_in.amount.abs().sum() - self.money_out.amount.abs().sum()
+        if amount_balance>0:
+            this_add = pd.DataFrame([[self.name, amount_balance , 'No Party', 'PAC Unspent Balance', 0]],
+                                    columns=["receiver", "amount", "party", "type", "proportion"])
+            self.money_out_resolved = self.money_out_resolved.append(this_add)
+            this_add2 = pd.DataFrame([[self.name, amount_balance, 'No Party', 'PAC Unspent Balance']],
+                                    columns=["receiver", "amount", "party", "type"])
+            self.money_out = self.money_out.append(this_add2)
         # when all donations have been resolved
         # get total donation amount and divide to obtain proportion for each candidate
         # use abs() in denominator since amounts can be negative (e.g. from an IE)
@@ -455,7 +490,7 @@ def load_pac_data(filename, nrows=0, debug=True):
         # this_receiver_party will be NaN for ballot measures and PACs, and the nans can break stuff
         if pd.isna(this_receiver_party):
             this_receiver_party = 'None'
-        this_amount = this_row['amount']
+        this_amount = float(this_row['amount'])
         this_giver_id = 'None'  # donor id is not provided in this data
 
         if this_receiver_type == 'Candidate':
@@ -546,12 +581,12 @@ if __name__ == '__main__':
     print("Running Main")
 
     print("Read in and process IE data")
-    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181026.csv')
+    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181102.csv')
 
     print("Read in and process PAC/Candidate data")
     print('If there is a DtypeWarning about columns (11,23) we can ignore it')
     data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181026.csv')
-    # data_pac = load_pac_data('small test data.csv')
+    #data_pac = load_pac_data('data\small test data.csv')
 
     print(time.time())
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
@@ -563,6 +598,10 @@ if __name__ == '__main__':
 
     print('Combine donors which are actually synonyms of a single donor')
     do_synonyms(data_pac)
+
+    print("Sum donations again")
+    data_ie.sum_donations()
+    data_pac.sum_donations()
 
     print("Resolve donations to track all donations through to final candidate/ballot issue (selected entities only)")
 
@@ -589,13 +628,13 @@ if __name__ == '__main__':
     start = time.time()
     # for i in data_pac.all_donors.keys(): # for processing all donors
     for i in donors_interest:
-        data_pac.all_donors[i].resolve_donations(data_pac, refresh=True)
+        data_pac.all_donors[i].resolve_donations(data_pac)
     end = time.time()
     print(end - start)
 
-    print(' ')
-    print('Example of money spent by one donor:')
-    print(data_pac.all_donors['WA REALTORS PAC'].money_out)
-    print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
+    print('Done')
+    #print('Example of money spent by one donor:')
+    #print(data_pac.all_donors['WA REALTORS PAC'].money_out)
+    #print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
 
     # save_to_file(data_pac, 'data_pac.pkl')

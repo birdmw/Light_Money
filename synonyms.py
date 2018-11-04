@@ -164,19 +164,19 @@ def do_synonyms(data_pac):
                              'MAINSTREAM REPUBLICANS',
                              'MAINSTREAM REPUBLICANS OF WASHINGTON PAC'])
 
-    data_pac.combine_donors(['WA ST REPUB PARTY EXEMPT',
-                             'WA STATE REPUBLICAN PARTY',
+    data_pac.combine_donors(['WA STATE REPUBLICAN PARTY',
+                             'WA ST REPUB PARTY EXEMPT',
                              'WA ST REPUB PARTY NON EXEMPT',
                              'WASHINGTON STATE REPUBLICAN PARTY - EXEMPT ACCOUNT',
                              'WASHINGTON STATE REPUBLICAN PARTY'])
 
-    data_pac.combine_donors(['WASHINGTON STATE DEMOCRATIC CENTRAL COMMITTEE',
+    data_pac.combine_donors(['WA STATE DEMOCRATIC PARTY',
+                             'WASHINGTON STATE DEMOCRATIC CENTRAL COMMITTEE',
                              'WA ST DEMO CENT COMM NON EXEMPT',
                              'WA STATE DEMOCRATS',
                              'WASHIINGTON STATE DEMOCRATS',
                              'WA STATE DEMOCRATIC CENTRAL COMMITTEE',
                              'WASHINGTON STATE DEMOCRATIC PARTY',
-                             'WA STATE DEMOCRATIC PARTY',
                              'WASHINGTON STATE DEMOCRATIC CENTRAL COMMITTEE -FEDERAL',
                              'WA ST DEMO CENT COMM EXEMPT',
                              'WASHINGTON STATE DEMOCRATIC COMMITTEE - NONEXEMPT',
@@ -358,3 +358,13 @@ def do_synonyms(data_pac):
                              'WEYERHAEUSER',
                              'WEYERHAEUSER COMAPANY',
                              'WEYERHAEUSER NR COMPANY'])
+
+    data_pac.combine_donors(['SNOHOMISH COUNTY REPUBLICAN PARTY',
+                             'SNOHOMISH COUNTY REPUBLICAN PA',
+                             'SNOHOMISH CO REPUB CENT COMM NON EXEMPT'])
+
+    data_pac.combine_donors(['SNOHOMISH COUNTY DEMOCRATS',
+                             'SNOHOMISH CO DEMO CENT COMM NON EXEMPT',
+                             'SNOHOMISH COUNTY DEMOCRATIC COMMITTEE']
+
+

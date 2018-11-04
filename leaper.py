@@ -20,7 +20,7 @@ class Donor():
 
     def __init__(self):
         self.name = " "
-        self.aliases = []
+        self.aliases = []  # stores list of synonyms when we combine_donors
         self.type = " "  # ind, pac, party, caucus
         self.filer_id = " "
         self.total_in = 0.0
@@ -284,12 +284,18 @@ def merge_ie_pac(donor_ie, data2, donor_key):
     ballot_receivers = [i for i in donor_ie.money_out['receiver'] if donor_ie.money_out['type'] == 'Ballot']
     # todo: make sure for statements skip quietly if iteration set is empty
     for i in cand_receivers:
-        # check if candidate exists in data2.all_candidates - if so append donation, if not create it and add donation
+        # check if candidate exists in data2.all_candidates - if so append donation
+        # if not check synonym list
+        # if in synonym list, find the right one and append it
+        # if still can't find it, create it and add donation and print message or write to log file
         # data2.all_candidates.keys()
         # todo: code here
         pass
     for i in ballot_receivers:
-        # check if pac exists in data2.all_donors - if so append donation, if not create it and add donation
+        # check if pac exists in data2.all_donors - if so append donation
+        # if not check synonym list
+        # if in synonym list, find the right one and append it
+        # if still can't find it, create it and add donation and write to log file
         # should scrutinize name closely - any ballot committee should already exist in the larger pac dataset,
         # might need to merge pacs if the name is not found
         # data2.all_donors.keys()
@@ -307,8 +313,8 @@ def output_dataframe(this_data):
 ################################
 # Save and Load functions for intermediate data
 # Usage:
-# save_to_file(data2,'data2.pickle')
-# data2 = load_from_file('data2.pickle')
+# save_to_file(data2,'data2.pkl')
+# data2 = load_from_file('data2.pkl')
 #
 
 def save_to_file(data, filename='data.pkl'):

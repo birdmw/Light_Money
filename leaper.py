@@ -8,7 +8,11 @@ from pandas.api.types import is_string_dtype
 import cPickle as pickle
 from collections import OrderedDict
 from manual_corrections import party_correction
-from synonyms import do_synonyms
+from manual_corrections import ballot_correction
+from synonyms import do_pac_synonyms
+from synonyms import do_ie_synonyms
+from difflib import get_close_matches
+from fuzzywuzzy import process
 
 # use cases:
 # 1. search by contributor & summarize by party
@@ -102,6 +106,14 @@ class Donor():
                             # mark self as resolved
                             self.has_resolved = True
                             return
+                    # check if receiver is also a donor to self, if so then fix to avoid recursion loop
+                    if this_receiver in self.money_in.donor.values:
+                        # remove line from self.money_in and this_receiver's money_out
+                        fulldata.all_donors[this_receiver].money_out = fulldata.all_donors[this_receiver].money_out.loc[
+                            fulldata.all_donors[this_receiver].money_out.receiver != self.name,:]
+                        self.money_in = self.money_in.loc[self.money_in.donor != this_receiver,:]
+                        # TODO: instead of the above 3 lines, determine smaller amount and subtract that from the loop
+                        # and then remove the newly zero donation
                     # check if the receiver is resolved yet, if not, tell them to resolve
                     if not (fulldata.all_donors[this_receiver].has_resolved):
                         fulldata.all_donors[this_receiver].resolve_donations(fulldata)
@@ -193,6 +205,7 @@ class Candidate():
         self.filer_id = " "
         self.party = " "
         self.type = ' '
+        self.aliases = []  # stores list of synonyms when we combine_candidates
         self.total_in = 0.0
         self.money_in = pd.DataFrame(columns=["donor", "donor_id", "amount"])
 
@@ -216,6 +229,52 @@ class Data():
             self.all_donors[i].sum_donations()
         for i in self.all_candidates.keys():
             self.all_candidates[i].sum_donations()
+
+    def combine_candidates(self, cand_list, rename=False):
+        # combine several Candidate() objects in self.all_candidates into a single Candidate()
+        #
+        # cand_list is a list of candidate names (strings) which are keys in self.all_candidates
+        # rename = False uses first item in cand_list as name of the combined candidate
+        # rename = text uses text as the new name
+        #
+        # make sure cand_list is a list
+        if not isinstance(cand_list,list):
+            cand_list = [cand_list]
+        # remove duplicates
+        cand_list = list(OrderedDict.fromkeys(cand_list))
+        # if cand_list is length 1 this still works, it can rename a candidate and propogate that name change to donors
+        # check if all strings in cand_list are valid keys in self.all_candidates
+        if not set(cand_list).issubset(self.all_candidates.keys()):
+            print('combine_candidates error: cand_list contains invalid key(s)')
+            print(set(cand_list)-set(self.all_candidates.keys()))
+            return
+        # first item in donor_list will be the new key
+        first_cand = self.all_candidates.pop(cand_list[0])
+        new_cand = Candidate()
+        new_cand.name = cand_list[0]
+        if rename:
+            new_cand.name = rename
+        new_cand.aliases = cand_list
+        new_cand.party = first_cand.party
+        new_cand.type = first_cand.type  # could check that this matches the type of others in cand_list
+        new_cand.filer_id = first_cand.filer_id
+        new_cand.money_in = first_cand.money_in
+        # if cand_list is length 1, this for loop will just be skipped, which is fine
+        for i in cand_list[1:]:
+            temp = self.all_candidates.pop(i)  # will raise error if i is not a valid key
+            new_cand.money_in = new_cand.money_in.append(temp.money_in)
+        # sum_donations again
+        new_cand.sum_donations()  # this sum will erase if a donor made donations both for and against
+        self.all_candidates[new_cand.name] = new_cand
+        # Now we have to follow through to everyone in money_in and update them to the new candidate name
+        all_givers = [x for x in new_cand.money_in['donor'] ]
+        for i in all_givers:
+            # for giver i, replace all occurences of cand_list with the new name
+            for j in cand_list:
+                self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = new_cand.name
+            self.all_donors[i].sum_donations()
+        return
+
 
     def combine_donors(self, donor_list):
         # remove duplicates
@@ -245,7 +304,8 @@ class Data():
             new_donor.money_in = new_donor.money_in.append(temp.money_in)
             new_donor.money_out = new_donor.money_out.append(temp.money_out)
             # check if donor has established a type yet
-            # when we get to a donor created by that donor's report in the original data (instead of created by the receiver's report), then it will have a non-blank party
+            # when we get to a donor created by that donor's report in the original data (instead of created by
+            # the receiver's report), then it will have a non-blank party
             if new_donor.type ==' ':
                 new_donor.type = temp.type
         # Remove donors/receivers from money_in/money_out which are in donor_list, then sum_donations again
@@ -270,6 +330,17 @@ class Data():
             for j in donor_list:
                 self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = donor_list[0]
 
+
+
+def merge_ie_candidates(data_pac, data_ie):
+    # change keys on all data_ie.all_candidates to match keys on data_pac.all_candidates
+    # this will allow easier merging of the IE donors
+    # for each key in ie, split at comma
+    # if there is a number, add it to appropriate ballot measure data
+    # otherwise, check for first and last name appearing in a pac key
+    # if there is 1 and only 1, then change ie key to pac key
+    # otherwise write to log file
+    pass
 
 def merge_ie_pac(donor_ie, data2, donor_key):
     # donor_ie is an IE donor (a Donor object)
@@ -301,6 +372,13 @@ def merge_ie_pac(donor_ie, data2, donor_key):
         # data2.all_donors.keys()
         # todo: code here
         pass
+
+
+def wrapper_get_close_matches(word,possibilities,n=1,cutoff=0.7):
+    temp = get_close_matches(word=word, possibilities=possibilities,n=n,cutoff=cutoff)
+    if len(temp)==0:
+        temp = ['No Match']
+    return temp[0]
 
 
 def output_dataframe(this_data):
@@ -367,7 +445,7 @@ def load_ie_data(filename):
         iedata.loc[
             iedata.loc[:, 'ballot_name_full'].isnull() & iedata.loc[:,
                                                          'ballot_number'].notnull(), 'ballot_number'].astype(
-            'str').str.replace('\.0', '')
+            'str').str.replace('\.0', '')+','
     data1 = Data()
     n_rows = iedata.shape[0]
     for i in range(n_rows):
@@ -575,7 +653,6 @@ def load_pac_data(filename, nrows=0, debug=True):
                                        columns=["receiver", "amount", "party", "type"])
                 new_donor.money_out = new_donor.money_out.append(new_add)
                 data2.all_donors[this_giver_name] = new_donor
-
     end = time.time()
     if debug:
         print(end - start)
@@ -594,16 +671,20 @@ if __name__ == '__main__':
     data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181026.csv')
     #data_pac = load_pac_data('data\small test data.csv')
 
-    print(time.time())
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
     data_ie.sum_donations()
     data_pac.sum_donations()
 
-    print("Make manual corrections to align party with a candidate's caucus")
+    print("Make manual corrections")
     party_correction(data_pac)
+    ballot_correction(data_ie)
 
-    print('Combine donors which are actually synonyms of a single donor')
-    do_synonyms(data_pac)
+    print('Combine entities which are actually synonyms of a single entity')
+    start = time.time()
+    do_pac_synonyms(data_pac)
+    do_ie_synonyms(data_ie)
+    end = time.time()
+    print(end - start)
 
     print("Sum donations again")
     data_ie.sum_donations()

@@ -15,3 +15,15 @@ def party_correction(data_pac):
     for i in data_pac.all_candidates['SHEA MATTHEW T'].money_in.donor:
         data_pac.all_donors[i].money_out.loc[data_pac.all_donors[i].money_out.receiver=='SHEA MATTHEW T','party'] = 'REPUBLICAN'
 
+def ballot_correction(data_ie):
+    #fix the reporting error made by Andeavor in reporting "for" the "against" position (should just be "against")
+    data_ie.all_candidates['1631, NO ON 1631'].money_in.amount = -data_ie.all_candidates[
+        '1631, NO ON 1631'].money_in.amount
+    data_ie.all_donors['MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.loc[
+        data_ie.all_donors[
+            'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.receiver == '1631, NO ON 1631', 'amount'
+    ] = -data_ie.all_donors['MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.loc[
+        data_ie.all_donors[
+            'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.receiver == '1631, NO ON 1631', 'amount'
+    ]
+

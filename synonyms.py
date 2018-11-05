@@ -1,5 +1,5 @@
 
-def do_synonyms(data_pac):
+def do_pac_synonyms(data_pac):
     # data_pac is a Data() object
 
     syn_realtors = ['WA REALTORS PAC',
@@ -365,6 +365,31 @@ def do_synonyms(data_pac):
 
     data_pac.combine_donors(['SNOHOMISH COUNTY DEMOCRATS',
                              'SNOHOMISH CO DEMO CENT COMM NON EXEMPT',
-                             'SNOHOMISH COUNTY DEMOCRATIC COMMITTEE']
+                             'SNOHOMISH COUNTY DEMOCRATIC COMMITTEE'])
+
+    data_pac.combine_donors(['SOUTH KING COUNTY DEMOCRATS', 'SOUTH KING CO DEMOCRATS'])
+
+    data_pac.combine_donors(['KING COUNTY REPUBLICAN PARTY',
+                            'KING CO REPUB CENT COMM EXEMPT',
+                            'KING COUNTY REPUBLICAN CENTRAL COMMITTEE NEX',
+                            'KING CO REPUB CENT COMM NON EXEMPT'])
+
+def do_ie_synonyms(data_ie):
+    # For IE candidate synonyms, must do 1631, 1634, 1639, and 940 first so that the local ones are found correctly
+
+    data_ie.combine_candidates(cand_list=[i for i in data_ie.all_candidates.keys() if (i.find('940') >= 0)],
+                               rename='940')
+    data_ie.combine_candidates(cand_list=[i for i in data_ie.all_candidates.keys() if (i.find('1631') >= 0)],
+                               rename='1631')
+    data_ie.combine_candidates(cand_list=[i for i in data_ie.all_candidates.keys() if (i.find('1634') >= 0)],
+                               rename='1634')
+    data_ie.combine_candidates(cand_list=[i for i in data_ie.all_candidates.keys() if (i.find('1639') >= 0)],
+                               rename='1639')
+    data_ie.combine_candidates(
+        cand_list=[i for i in data_ie.all_candidates.keys() if (i.find('0,', 0, 3) >= 0) | (i.find('1,', 0, 3) >= 0)],
+        rename='Local Ballot Measures')
+
+
+
 
 

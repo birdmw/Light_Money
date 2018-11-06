@@ -7,8 +7,8 @@ import time as time
 from pandas.api.types import is_string_dtype
 import cPickle as pickle
 from collections import OrderedDict
-from manual_corrections import party_correction
-from manual_corrections import ballot_correction
+from manual_corrections import pac_correction
+from manual_corrections import ie_correction
 from synonyms import do_pac_synonyms
 from synonyms import do_ie_synonyms
 from difflib import get_close_matches
@@ -39,11 +39,20 @@ class Donor():
 
     def __repr__(self):
         if self.money_out_resolved.empty:
-            return "<Name:%s ID:%s Money in/out:%s / %s>" % (self.name, self.filer_id, self.money_in['amount'].sum(), self.money_out['amount'].sum())
+            return "<Name:%s ID:%s Money in/out:%s / %s>" % (self.name, self.filer_id, self.money_in['amount'].sum(),
+                                                             self.money_out['amount'].sum())
         # note sum() will be 0 if df is empty
-        this_d = self.money_out_resolved.loc[self.money_out_resolved['party']=='DEMOCRAT','proportion'].sum()
-        this_r = self.money_out_resolved.loc[self.money_out_resolved['party'] == 'REPUBLICAN', 'proportion'].sum()
-        return "<Name:%s ID:%s Money in/out:%s / %s  Pct: %s D / %s R>" % (self.name, self.filer_id, self.money_in['amount'].sum(), self.money_out['amount'].sum(),int(100*this_d),int(100*this_r))
+        this_d_plus = self.money_out_resolved.loc[(self.money_out_resolved['party']=='DEMOCRAT')&
+                                                  (self.money_out_resolved['proportion']>0),'proportion'].sum()
+        this_d_minus = self.money_out_resolved.loc[(self.money_out_resolved['party']=='DEMOCRAT')&
+                                                  (self.money_out_resolved['proportion']<0),'proportion'].sum()
+        this_r_plus = self.money_out_resolved.loc[(self.money_out_resolved['party'] == 'REPUBLICAN') &
+                                                  (self.money_out_resolved['proportion'] > 0), 'proportion'].sum()
+        this_r_minus = self.money_out_resolved.loc[(self.money_out_resolved['party'] == 'REPUBLICAN') &
+                                                   (self.money_out_resolved['proportion'] < 0), 'proportion'].sum()
+        return "<Name:%s ID:%s Money in/out:%s / %s  Pct: %s D+ / %s R+ / %s D- / %s R->" % (self.name, self.filer_id,
+                self.money_in['amount'].sum(), self.money_out['amount'].sum(),
+                int(100*this_d_plus),int(100*this_r_plus),int(100*this_d_minus),int(100*this_r_minus))
 
     def sum_donations(self):
         # check that money_in and money_out are non-empty (otherwise it would break), and if so sum them by receiver
@@ -133,13 +142,13 @@ class Donor():
                         prop_in = this_amount / fulldata.all_donors[this_receiver].money_in.amount.sum()
                     else:
                         prop_in = 1.0
-                    #amount_resolved = prop_in * amount_resolved
                     if prop_in>1.0:
                         raise ValueError('in resolve_donations: this_amount greater than sum of money_in')
                     # Limit amount_resolved to the amount that was spent (elementwise):
                     if any( (prop_in*abs(pac_resolved.loc[:, 'amount']))<(0.9999*abs(amount_resolved) )):
                         temp_filter = ((amount_resolved>=0)*2)-1 # save the signs of each element
                         #expanding this to debug
+                        # TODO: remove this debugging code.  This is fixed, and this section should not be reached.
                         amount_resolved_index = amount_resolved.index
                         temp1 = prop_in * pac_resolved.loc[:, 'amount']
                         temp2 = temp1.abs()
@@ -239,7 +248,10 @@ class Data():
         #
         # make sure cand_list is a list
         if not isinstance(cand_list,list):
-            cand_list = [cand_list]
+            if isinstance(cand_list, basestring):
+                cand_list = [cand_list]
+            else:
+                raise ValueError('combine_candidates: cand_list should be string or list of strings')
         # remove duplicates
         cand_list = list(OrderedDict.fromkeys(cand_list))
         # if cand_list is length 1 this still works, it can rename a candidate and propogate that name change to donors
@@ -676,8 +688,8 @@ if __name__ == '__main__':
     data_pac.sum_donations()
 
     print("Make manual corrections")
-    party_correction(data_pac)
-    ballot_correction(data_ie)
+    pac_correction(data_pac)
+    ie_correction(data_ie)
 
     print('Combine entities which are actually synonyms of a single entity')
     start = time.time()
@@ -689,6 +701,94 @@ if __name__ == '__main__':
     print("Sum donations again")
     data_ie.sum_donations()
     data_pac.sum_donations()
+
+    print('Converting data_ie.all_candidates.keys() to match data_pac.all_candidates.keys()')
+    oldname = [i for i in data_ie.all_candidates.keys() if not any(char.isdigit() for char in i)]
+    newname = [wrapper_get_close_matches(i, data_pac.all_candidates.keys()) for i in oldname]
+    cand_change = pd.DataFrame.from_items([('oldnames', oldname), ('newnames', newname)])
+    # Write out a log file of all the matches.  Cases with 'No Match' will be dropped.
+    # All cases must be manually verified for accuracy and manually fixed (e.g. William Colyer != William Cooper)
+    f = open("log-candidate name matching IE to PAC.txt", "w")
+    for i in range(len(cand_change.oldnames)):
+        f.write("%s\n" % [cand_change.iloc[i, :][0], cand_change.iloc[i, :][1]])
+    f.close()
+    # manual fix for Colyer/Cooper
+    cand_change.newnames.loc[cand_change.newnames == 'COOPER WILLIAM T'] = 'No Match'
+    # drop cases with no match - these are usually local candidates using mini-reporting with only small IE donations
+    cand_change = cand_change.loc[cand_change.newnames != 'No Match', :]
+    # update the key names using combine_candidates
+    for i in range(len(cand_change.oldnames)):
+        data_ie.combine_candidates([cand_change.iloc[i, :].oldnames], rename=cand_change.iloc[i, :].newnames)
+
+    oldname = data_ie.all_donors.keys()
+    newname = [wrapper_get_close_matches(i, data_pac.all_donors.keys()) for i in oldname]
+
+    donor_change = pd.DataFrame.from_items([('oldnames', oldname), ('newnames', newname)])
+
+    temp = [i for i in data_ie.all_donors.keys() if i.find('ENTERPRISE WA') >= 0]
+    for i in temp:
+        donor_change.newnames.loc[donor_change.oldnames == i] = 'ENTERPRISE WASHINGTON'
+
+    donor_change.newnames.loc[donor_change.oldnames == 'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'] = 'ANDEAVOR'
+    donor_change.newnames.loc[
+                    donor_change.oldnames == 'NRA POLITICAL VICTORY FUND'] = 'NATIONAL RIFLE ASSOCIATION OF AMERICA'
+    donor_change.newnames.loc[donor_change.oldnames == 'WA EDUCATION ASSN PAC'] = 'WASHINGTON EDUCATION ASSOCIATION'
+    donor_change.newnames.loc[
+                    donor_change.oldnames == 'WASHINGTON REALTORS POLITICAL ACTION COMMITTEE'] = 'WA REALTORS PAC'
+    donor_change.newnames.loc[donor_change.oldnames == 'FRIENDS OF ELAINE PHELPS'] = 'No Match'
+    donor_change.newnames.loc[donor_change.oldnames == 'WA FORWARD'] = 'WA FORWARD (THE LEADERSHIP COUNCIL)'
+
+    f = open("log-donor name matching IE to PAC.txt", "w")
+    for i in range(len(donor_change.oldnames)):
+        f.write("%s\n" % [donor_change.iloc[i, :][0], donor_change.iloc[i, :][1]])
+    f.close()
+
+    # now data_ie.all_candidates.keys() are consistent with data_pac.all_candidates except ballot measures
+    # and we have a map of data_ie.all_donors.keys() to keys in data_pac.all_donors.keys()
+    # so for each candidate in data_ie,
+    # we append its money_in to the corresponding candidate in data_pac, correcting the donor names as we go
+    # and update each donor in data_pac with the donation
+
+    for i in cand_change.newnames:
+        print(i)
+        this_donors = data_ie.all_candidates[i].money_in.donor.copy()
+        this_name = data_ie.all_candidates[i].name
+        this_party = data_ie.all_candidates[i].party
+        this_type = data_ie.all_candidates[i].type
+        # if there is only one donor, it will return as a string, so convert to a list to use with the for statement
+        if isinstance(this_donors, basestring):
+            this_donors = [this_donors]
+        # for each donor in this candidate's money_in:
+        for j in this_donors:
+            # get the amount from donor j to candidate i
+            this_amount = data_ie.all_candidates[i].money_in.amount.loc[this_donors == j].values[0]
+            # get the new pac donor name
+            new_donor = donor_change.newnames.loc[donor_change.oldnames == j].values[0]
+            # change the old ie donor name to the new pac donor name
+            data_ie.all_candidates[i].money_in.donor.loc[this_donors == j] = new_donor
+            # if the new name is 'No Match' then this donor is not in data_pac;
+            # so don't update data_pac, give a log message showing amount, and after for loop, drop the no match rows
+            if new_donor == 'No Match':
+                print('No Match - skipped:')
+                print(j)
+                print(this_amount)
+            else:
+                # update the donor's money_out with this candidate
+                this_add = pd.DataFrame([[this_name, this_amount, this_party, this_type]],
+                                        columns=["receiver", "amount", "party", "type"])
+                data_pac.all_donors[new_donor].money_out = data_pac.all_donors[
+                    new_donor].money_out.append(this_add, ignore_index=True)
+        # drop the no match rows
+        data_ie.all_candidates[i].money_in = data_ie.all_candidates[i].money_in.loc[
+                                             data_ie.all_candidates[i].money_in.donor != 'No Match', :]
+        # append ie candidate's updated money_in to the pac candidate's money_in
+        data_pac.all_candidates[i].money_in = data_pac.all_candidates[i].money_in.append(
+            data_ie.all_candidates[i].money_in, ignore_index=True)
+
+    # TODO: merge in initiatives and local ballot measures from IE data
+    # additional work needed in combining donors
+    # mark all party organizations with their party so donor percentages reflect their party
+    # don't let negative IE spending offset positive spending on a candidate
 
     print("Resolve donations to track all donations through to final candidate/ballot issue (selected entities only)")
 
@@ -720,8 +820,8 @@ if __name__ == '__main__':
     print(end - start)
 
     print('Done')
-    #print('Example of money spent by one donor:')
-    #print(data_pac.all_donors['WA REALTORS PAC'].money_out)
-    #print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
+    # print('Example of money spent by one donor:')
+    # print(data_pac.all_donors['WA REALTORS PAC'].money_out)
+    # print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
 
     # save_to_file(data_pac, 'data_pac.pkl')

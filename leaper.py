@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from sodapy import Socrata
+# from sodapy import Socrata
 import time as time
 from pandas.api.types import is_string_dtype
 import cPickle as pickle
@@ -12,7 +12,7 @@ from manual_corrections import ie_correction
 from synonyms import do_pac_synonyms
 from synonyms import do_ie_synonyms
 from difflib import get_close_matches
-from fuzzywuzzy import process
+# from fuzzywuzzy import process
 
 # use cases:
 # 1. search by contributor & summarize by party
@@ -813,6 +813,7 @@ if __name__ == '__main__':
                        'MUCKLESHOOT INDIAN TRIBE']
 
     start = time.time()
+    save_to_file(data_pac, 'data_pac.pkl')
     # for i in data_pac.all_donors.keys(): # for processing all donors
     for i in donors_interest:
         data_pac.all_donors[i].resolve_donations(data_pac)

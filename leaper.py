@@ -719,16 +719,17 @@ if __name__ == '__main__':
     # update the key names using combine_candidates
     for i in range(len(cand_change.oldnames)):
         data_ie.combine_candidates([cand_change.iloc[i, :].oldnames], rename=cand_change.iloc[i, :].newnames)
+    # now the candidate names/keys in data_ie match the ones in data_pac
 
     oldname = data_ie.all_donors.keys()
     newname = [wrapper_get_close_matches(i, data_pac.all_donors.keys()) for i in oldname]
 
+    # donor_change is a map from oldnames (in data_ie) to newnames (in data_pac)
     donor_change = pd.DataFrame.from_items([('oldnames', oldname), ('newnames', newname)])
-
+    # manually fix some of the mistakes made by the automated method
     temp = [i for i in data_ie.all_donors.keys() if i.find('ENTERPRISE WA') >= 0]
     for i in temp:
         donor_change.newnames.loc[donor_change.oldnames == i] = 'ENTERPRISE WASHINGTON'
-
     donor_change.newnames.loc[donor_change.oldnames == 'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'] = 'ANDEAVOR'
     donor_change.newnames.loc[
                     donor_change.oldnames == 'NRA POLITICAL VICTORY FUND'] = 'NATIONAL RIFLE ASSOCIATION OF AMERICA'
@@ -737,18 +738,16 @@ if __name__ == '__main__':
                     donor_change.oldnames == 'WASHINGTON REALTORS POLITICAL ACTION COMMITTEE'] = 'WA REALTORS PAC'
     donor_change.newnames.loc[donor_change.oldnames == 'FRIENDS OF ELAINE PHELPS'] = 'No Match'
     donor_change.newnames.loc[donor_change.oldnames == 'WA FORWARD'] = 'WA FORWARD (THE LEADERSHIP COUNCIL)'
-
+    # write out the mapping for further manual inspection
     f = open("log-donor name matching IE to PAC.txt", "w")
     for i in range(len(donor_change.oldnames)):
         f.write("%s\n" % [donor_change.iloc[i, :][0], donor_change.iloc[i, :][1]])
     f.close()
-
     # now data_ie.all_candidates.keys() are consistent with data_pac.all_candidates except ballot measures
     # and we have a map of data_ie.all_donors.keys() to keys in data_pac.all_donors.keys()
     # so for each candidate in data_ie,
     # we append its money_in to the corresponding candidate in data_pac, correcting the donor names as we go
     # and update each donor in data_pac with the donation
-
     for i in cand_change.newnames:
         print(i)
         this_donors = data_ie.all_candidates[i].money_in.donor.copy()

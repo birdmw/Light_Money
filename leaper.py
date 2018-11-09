@@ -288,13 +288,15 @@ class Data():
         return
 
 
-    def combine_donors(self, donor_list):
+    def combine_donors(self, donor_list, rename = False):
         # remove duplicates
         donor_list = list(OrderedDict.fromkeys(donor_list))
-        # check if donor_list is longer than 1
-        if len(donor_list)<2:
-            print('combine_donors error: donor_list is less than length 2')
-            return
+        # make sure donor_list is a list
+        if not isinstance(donor_list, list):
+            if isinstance(donor_list, basestring):
+                donor_list = [donor_list]
+            else:
+                raise ValueError('combine_donors: donor_list should be string or list of strings')
         # check if all strings in donor_list are valid keys in self.all_donors
         if not set(donor_list).issubset(self.all_donors.keys()):
             print('combine_donors error: donor_list contains invalid key(s)')
@@ -304,6 +306,8 @@ class Data():
         first_donor = self.all_donors.pop(donor_list[0])
         new_donor = Donor()
         new_donor.name = donor_list[0]
+        if rename:
+            new_donor.name = rename
         new_donor.aliases = donor_list
         new_donor.type = first_donor.type
         new_donor.filer_id = first_donor.filer_id
@@ -331,16 +335,17 @@ class Data():
         for i in all_receivers:
             if new_donor.money_out.loc[new_donor.money_out['receiver']==i,'type'].tolist()[0]=='Candidate':
                 for j in donor_list:
-                    self.all_candidates[i].money_in.loc[self.all_candidates[i].money_in.loc[:,'donor'] == j,'donor'] = donor_list[0]
+                    self.all_candidates[i].money_in.loc[self.all_candidates[i].money_in.loc[:,'donor'] == j,'donor'] = new_donor.name
             else:
                 for j in donor_list:
-                    self.all_donors[i].money_in.loc[self.all_donors[i].money_in.loc[:,'donor'] == j,'donor'] = donor_list[0]
-        # screen out any donations within the synonym set itself
+                    self.all_donors[i].money_in.loc[self.all_donors[i].money_in.loc[:,'donor'] == j,'donor'] = new_donor.name
+        # now update this name for all donors to this entity
+        # first screen out any donations within the synonym set itself
         all_givers = [x for x in new_donor.money_in['donor'] if x not in donor_list]
         for i in all_givers:
             # no candidates will be donors to this pac, so don't have to check type
             for j in donor_list:
-                self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = donor_list[0]
+                self.all_donors[i].money_out.loc[self.all_donors[i].money_out.loc[:, 'receiver'] == j, 'receiver'] = new_donor.name
 
 
 

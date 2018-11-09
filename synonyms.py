@@ -369,10 +369,49 @@ def do_pac_synonyms(data_pac):
 
     data_pac.combine_donors(['SOUTH KING COUNTY DEMOCRATS', 'SOUTH KING CO DEMOCRATS'])
 
+    data_pac.combine_donors(['SOUTH KING COUNTY DESERVES BETTER', 'SOUTH KING CO DESERVES BETTER'])
+
     data_pac.combine_donors(['KING COUNTY REPUBLICAN PARTY',
                             'KING CO REPUB CENT COMM EXEMPT',
                             'KING COUNTY REPUBLICAN CENTRAL COMMITTEE NEX',
                             'KING CO REPUB CENT COMM NON EXEMPT'])
+
+    data_pac.combine_donors(['FARMERS INSURANCE',
+                             'FARMERS GROUP, INC.',
+                             'FARMERS GROUP INC',
+                             'FARMERS EMPLOYEES & AGENT PAC',
+                             'FARMERS GROUP, INC. (FARMERS EMPLOYEES &',
+                             'FARMERS EMPLOYEES AND AGENTS PAC',
+                             'FARMERS EMPLOYEES &  AGENTS PA'])
+
+    data_pac.combine_donors(['ALLSTATE INSURANCE CO',
+                             'ALLSTATE INSURANCE COMPANY',
+                             'ALLSTATE INSURANCE',
+                             'ALLSTATE INSURANCE CO.'])
+
+    data_pac.combine_donors(['WASHINGTON BEVERAGE ASSOCIATION',
+                             'WASINGTON BEVERAGE ASSOCIATION',
+                             'WASHINGTON BEVERAGE ASSOCIATION POLITICAL ACTION COMMITTEE',
+                             'WA BEVERAGE ASSOCIATION PAC',
+                             'WA BEVERAGE ASSOCIATION',
+                             'WASHINGTON BEVERAGE ASSOC PAC',
+                             'WA BEVERAGE ASSOC',
+                             'WA BEVERAGE ASSN',
+                             'WASHINGTON BEVERAGE ASSOCIATION PAC',
+                             'WA BEVERAGE ASSN PAC',
+                             'WASH. BEVERAGE ASSOC. PAC',
+                             'WASHINGTON BEVERAGE ASSN',
+                             'WA BEVERAGE ASSN.',
+                             'WASHINGTON BEVERAGE ASSOCIATION, PAC',
+                             'WASHINGTON BEVERAGE ASSOCIATIO',
+                             'WA BEVERAGE ASSOC. PAC',
+                             'WA BEVERAGE ASSOC PAC',
+                             'WASHINGTON STATE BEVERAGE ASSOCIATION'])
+
+    data_pac.combine_donors(['ONEAMERICA VOTES',
+                             'ONE AMERICA',
+                             'ONEAMERICA VOTES JUSTICE FUND'])
+
 
 def do_ie_synonyms(data_ie):
     # For IE candidate synonyms, must do 1631, 1634, 1639, and 940 first so that the local ones are found correctly

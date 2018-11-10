@@ -726,9 +726,9 @@ if __name__ == '__main__':
         data_ie.combine_candidates([cand_change.iloc[i, :].oldnames], rename=cand_change.iloc[i, :].newnames)
     # now the candidate names/keys in data_ie match the ones in data_pac
 
+    print('Finding matches between data_ie.all_donors.keys() and data_pac.all_donors.keys()')
     oldname = data_ie.all_donors.keys()
     newname = [wrapper_get_close_matches(i, data_pac.all_donors.keys()) for i in oldname]
-
     # donor_change is a map from oldnames (in data_ie) to newnames (in data_pac)
     donor_change = pd.DataFrame.from_items([('oldnames', oldname), ('newnames', newname)])
     # manually fix some of the mistakes made by the automated method
@@ -750,9 +750,13 @@ if __name__ == '__main__':
     f.close()
     # now data_ie.all_candidates.keys() are consistent with data_pac.all_candidates except ballot measures
     # and we have a map of data_ie.all_donors.keys() to keys in data_pac.all_donors.keys()
-    # so for each candidate in data_ie,
+
+    #####
+    # Merge the IE candidates data into the PAC candidates data
+    # for each candidate in data_ie,
     # we append its money_in to the corresponding candidate in data_pac, correcting the donor names as we go
     # and update each donor in data_pac with the donation
+    # TODO: more efficient to change the approach here to use a dictionary instead of dataframe (see donor_old_to_new below)
     for i in cand_change.newnames:
         print(i)
         this_donors = data_ie.all_candidates[i].money_in.donor.copy()
@@ -789,9 +793,58 @@ if __name__ == '__main__':
         data_pac.all_candidates[i].money_in = data_pac.all_candidates[i].money_in.append(
             data_ie.all_candidates[i].money_in, ignore_index=True)
 
-    # TODO: merge in initiatives and local ballot measures from IE data
+    # Merge the IE initiative groups in to the PAC initiative groups
+    # Combine initiative groups into single group for or against each initiative
+    data_pac.combine_donors(donor_list=['DE-ESCALATE WA I-940'], rename='FOR 940')
+    data_pac.combine_donors(
+        donor_list=['COPS AGAINST I-940  WA COUNCIL OF POLICE & SHERIFFS', 'COALITION FOR A SAFER WA'],
+        rename='AGAINST 940')
+    data_pac.combine_donors(donor_list=['CLEAN AIR CLEAN ENERGY WA'], rename='FOR 1631')
+    data_pac.combine_donors(donor_list=['NO ON 1631',
+                                        'NO ON 1631 (SPONSORED BY WESTERN STATES PETROLEUM ASSN)',
+                                        'I-1631 SPONSORED BY ASSOC OF WA BUSINESS'], rename='AGAINST 1631')
+    data_pac.combine_donors(donor_list=['YES! TO AFFORDABLE GROCERIES (SEE EMAIL FOR REST OF NAME)'], rename='FOR 1634')
+    data_pac.combine_donors(donor_list=['HEALTHY KIDS COALITION'], rename='AGAINST 1634')
+    data_pac.combine_donors(donor_list=['SAFE SCHOOLS SAFE COMMUNITIES'], rename='FOR 1639')
+    data_pac.combine_donors(donor_list=['STOP 1639 - SPONSOR SHALL NOT BE INFRINGED', 'SHALL NOT BE INFRINGED',
+                                        'SAVE OUR SECURITY NO ON I-1639',
+                                        'WASHINGTONIANS AND THE NATIONAL RIFLE ASSN FOR FREEDOM'],
+                            rename='AGAINST 1639')
+    donor_old_to_new = dict(zip(donor_change.oldnames, donor_change.newnames))
+    donor_new_to_old = dict(zip(donor_change.newnames, donor_change.oldnames))
+
+    this_ie_label_list = ['940', '1631', '1634', '1639']
+    this_pac_label_dict = {'940': ['FOR 940', 'AGAINST 940'],
+                           '1631': ['FOR 1631', 'AGAINST 1631'],
+                           '1634': ['FOR 1634', 'AGAINST 1634'],
+                           '1639': ['FOR 1639', 'AGAINST 1639']}
+    for this_ie_label in this_ie_label_list:
+        this_pac_label = this_pac_label_dict[this_ie_label]
+        # get positive (for) rows and negative (against) rows and put them in the appropriate places, converting donor names too
+        for i in range(len(data_ie.all_candidates[this_ie_label].money_in)):
+            this_row = data_ie.all_candidates[this_ie_label].money_in.iloc[i, :]
+            this_donor = this_row.donor
+            this_donor_id = this_row.donor_id
+            this_amount = this_row.amount
+            # convert old (IE) name to new (PAC) name
+            this_donor = donor_old_to_new[this_donor]
+            # skip any donors that have no match in PAC data
+            if this_donor != 'No Match':
+                if this_amount >= 0:
+                    this_add = pd.DataFrame([[this_donor, this_donor_id, this_amount]],
+                                            columns=['donor', 'donor_id', 'amount'])
+                    data_pac.all_donors[this_pac_label[0]].money_in = data_pac.all_donors[
+                        this_pac_label[0]].money_in.append(this_add, ignore_index=True)
+                else:
+                    # convert negative spend to a positive contribution to the Against side
+                    this_amount = this_amount * (-1)
+                    this_add = pd.DataFrame([[this_donor, this_donor_id, this_amount]],
+                                            columns=['donor', 'donor_id', 'amount'])
+                    data_pac.all_donors[this_pac_label[1]].money_in = data_pac.all_donors[
+                        this_pac_label[1]].money_in.append(this_add, ignore_index=True)
+
     # additional work needed in combining donors
-    # mark all party organizations with their party so donor percentages reflect their party
+    # TODO: mark all party organizations with their party so donor percentages reflect their party
     # don't let negative IE spending offset positive spending on a candidate
 
     print("Resolve donations to track all donations through to final candidate/ballot issue (selected entities only)")
@@ -819,8 +872,8 @@ if __name__ == '__main__':
     start = time.time()
     save_to_file(data_pac, 'data_pac.pkl')
     # for i in data_pac.all_donors.keys(): # for processing all donors
-    for i in donors_interest:
-        data_pac.all_donors[i].resolve_donations(data_pac)
+    #for i in donors_interest:
+    #    data_pac.all_donors[i].resolve_donations(data_pac)
     end = time.time()
     print(end - start)
 

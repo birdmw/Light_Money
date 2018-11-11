@@ -16,16 +16,19 @@ def pac_correction(data_pac):
         data_pac.all_donors[i].money_out.loc[data_pac.all_donors[i].money_out.receiver=='SHEA MATTHEW T','party'] = 'REPUBLICAN'
 
 def ie_correction(data_ie):
-    #fix the reporting error made by Andeavor in reporting "for" the "against" position (should just be "against")
-    data_ie.all_candidates['1631, NO ON 1631'].money_in.amount = -data_ie.all_candidates[
-        '1631, NO ON 1631'].money_in.amount
-    data_ie.all_donors['MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.loc[
-        data_ie.all_donors[
-            'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.receiver == '1631, NO ON 1631', 'amount'
-    ] = -data_ie.all_donors['MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.loc[
-        data_ie.all_donors[
-            'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.receiver == '1631, NO ON 1631', 'amount'
-    ]
+    #### It appears the problem below was fixed in the data source between 10/26 and 11/10
+    ##fix the reporting error made by Andeavor in reporting "for" the "against" position (should just be "against")
+    #data_ie.all_candidates['1631, NO ON 1631'].money_in.amount = -data_ie.all_candidates[
+    #    '1631, NO ON 1631'].money_in.amount
+    #data_ie.all_donors['MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.loc[
+    #    data_ie.all_donors[
+    #        'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.receiver == '1631, NO ON 1631', 'amount'
+    #] = -data_ie.all_donors['MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.loc[
+    #    data_ie.all_donors[
+    #        'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'].money_out.receiver == '1631, NO ON 1631', 'amount'
+    #]
+    #####################
+    #
     #fix the party labels as above
     #don't need to fix the money_out data in IE dataset since it is not propogated back to data_pac when they are merged
     data_ie.all_candidates['TOM, RODNEY'].party = 'REPUBLICAN'

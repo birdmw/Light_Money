@@ -67,18 +67,22 @@ class Donor():
         return
 
     def resolve_donations(self, fulldata):
-        # need to check recursion problems - if called recursively on a pac which is already calling it,
-        # then throw error due to loop in donations
+        # TODO: check for second-level recursion problems, i.e. if PAC A -> PAC B -> PAC C -> PAC A
+        # recursion is detected if PAC A -> PAC A or if PAC A -> PAC B -> PAC A
         print(self.name)
         if (self.has_resolved == True):
             return
         # reset the money_out_resolved dataframe
         self.money_out_resolved = pd.DataFrame(columns=["receiver", "amount", "party", "type", "proportion"])
+        # check if this is a party pac
+        my_party_name = 'No Party'
+        if self.name in fulldata.party_pac_dict.keys():
+            my_party_name = fulldata.party_pac_dict[self.name]
         # get number of donations to resolve
         n_donations = len(self.money_out)
         # check if money_out is empty
         if n_donations < 1:
-            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), "No Party", 'Terminal PAC', 1.0]],
+            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), my_party_name, 'Terminal PAC', 1.0]],
                                                    columns=["receiver", "amount", "party", "type", "proportion"])
             # mark self as resolved
             self.has_resolved = True
@@ -109,7 +113,7 @@ class Donor():
                         print('Recursion loop: Ignoring donation to self by '+self.name)
                         # if this is the only donation then this is a terminal PAC, so set money_out_resolved and return
                         if (self.money_out_resolved.empty)&(i==(n_donations-1)):
-                            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), "No Party", 'Terminal PAC', 1.0]],
+                            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), my_party_name, 'Terminal PAC', 1.0]],
                                                                    columns=["receiver", "amount", "party", "type",
                                                                             "proportion"])
                             # mark self as resolved
@@ -137,6 +141,8 @@ class Donor():
                     #
                     # Resolve donations based on proportions of outgoing donations:
                     amount_resolved = this_amount * pac_resolved.loc[:, 'proportion']
+
+                    ###### Old code section, no longer used
                     # Adjust based on proportion of money_in, but not if the PAC must have had a starting balance
                     if fulldata.all_donors[this_receiver].total_in>=fulldata.all_donors[this_receiver].total_out:
                         prop_in = this_amount / fulldata.all_donors[this_receiver].money_in.amount.sum()
@@ -171,6 +177,8 @@ class Donor():
                         amount_resolved = temp5
                         print(temp5)
                         # amount_resolved = temp_filter*(amount_resolved.abs().combine(abs(prop_in*pac_resolved.loc[:, 'amount']),min))
+                    ############# end of old code section
+                    #
                     # construct DataFrame from pac_resolved and amount_resolved (proportion will be computed later)
                     this_add = pac_resolved.copy()
                     this_add.loc[:, 'amount'] = amount_resolved
@@ -189,10 +197,11 @@ class Donor():
         # if this pac is reporting more money_in than money_out, then record it as unspent
         amount_balance = self.money_in.amount.abs().sum() - self.money_out.amount.abs().sum()
         if amount_balance>0:
-            this_add = pd.DataFrame([[self.name, amount_balance , 'No Party', 'PAC Unspent Balance', 0]],
+            this_add = pd.DataFrame([[self.name, amount_balance , my_party_name, 'PAC Unspent Balance', 0]],
                                     columns=["receiver", "amount", "party", "type", "proportion"])
             self.money_out_resolved = self.money_out_resolved.append(this_add)
-            this_add2 = pd.DataFrame([[self.name, amount_balance, 'No Party', 'PAC Unspent Balance']],
+            #store the unspent balance in money_out also so it balances
+            this_add2 = pd.DataFrame([[self.name, amount_balance, my_party_name, 'PAC Unspent Balance']],
                                     columns=["receiver", "amount", "party", "type"])
             self.money_out = self.money_out.append(this_add2)
         # when all donations have been resolved
@@ -232,6 +241,7 @@ class Data():
     def __init__(self):
         self.all_donors = {}  # list of all donors (ind and pac)
         self.all_candidates = {}  # list of all candidates
+        self.party_pac_dict = {}  # map of pac names that are party organizations
 
     def sum_donations(self):
         for i in self.all_donors.keys():
@@ -429,7 +439,7 @@ def load_from_file(filename='data.pkl'):
 def load_ie_data(filename):
     # check if file exists, if so load it
     iedata = pd.read_csv(filename)
-    # todo: screen out 2017 election year data
+    # todo: screen out 2017 election year data (if needed, or just filter at source)
     # we can't screen by election year for ie data; they only report calendar year
     # we need to get all donations from 2017 which were used for 2018 election year
     # so we have to screen out spending which was done in 2017
@@ -681,11 +691,11 @@ if __name__ == '__main__':
     print("Running Main")
 
     print("Read in and process IE data")
-    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181102.csv')
+    data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181110.csv')
 
     print("Read in and process PAC/Candidate data")
     print('If there is a DtypeWarning about columns (11,23) we can ignore it')
-    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181026.csv')
+    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv')
     #data_pac = load_pac_data('data\small test data.csv')
 
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
@@ -756,7 +766,7 @@ if __name__ == '__main__':
     # for each candidate in data_ie,
     # we append its money_in to the corresponding candidate in data_pac, correcting the donor names as we go
     # and update each donor in data_pac with the donation
-    # TODO: more efficient to change the approach here to use a dictionary instead of dataframe (see donor_old_to_new below)
+    # TODO: maybe more efficient to change the approach here to use a dictionary instead of dataframe (see donor_old_to_new below)
     for i in cand_change.newnames:
         print(i)
         this_donors = data_ie.all_candidates[i].money_in.donor.copy()
@@ -847,6 +857,18 @@ if __name__ == '__main__':
     # TODO: mark all party organizations with their party so donor percentages reflect their party
     # don't let negative IE spending offset positive spending on a candidate
 
+    data_pac.party_pac_dict = {'WA STATE DEMOCRATIC PARTY':'DEMOCRAT',
+                               'WA STATE REPUBLICAN PARTY': 'REPUBLICAN',
+                               'SENATE REPUBLICAN CAMPAIGN COMMITTEE': 'REPUBLICAN',
+                               'HOUSE REPUBLICAN ORGANIZATION COMMITTEE': 'REPUBLICAN',
+                               'HOUSE DEMOCRATIC CAUCUS CAMPAIGN COMMITTEE':'DEMOCRAT',
+                               'WASHINGTON SENATE DEMOCRATIC CAMPAIGN':'DEMOCRAT',
+                               'HARRY TRUMAN FUND':'DEMOCRAT',
+                               'REAGAN FUND': 'REPUBLICAN',
+                               'KENNEDY FUND':'DEMOCRAT',
+                               'THE LEADERSHIP COUNCIL': 'REPUBLICAN',
+                               'MAINSTREAM REPUB OF WA ST PAC': 'REPUBLICAN'}
+
     print("Resolve donations to track all donations through to final candidate/ballot issue (selected entities only)")
 
     # define list of donors of interest
@@ -867,7 +889,8 @@ if __name__ == '__main__':
                        'WEYERHAEUSER CO',
                        'KOCH INDUSTRIES, INC.',
                        'WASHINGTON EDUCATION ASSOCIATION',
-                       'MUCKLESHOOT INDIAN TRIBE']
+                       'MUCKLESHOOT INDIAN TRIBE',
+                       'PUYALLUP TRIBE OF INDIANS']
 
     start = time.time()
     save_to_file(data_pac, 'data_pac.pkl')

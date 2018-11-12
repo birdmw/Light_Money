@@ -36,6 +36,7 @@ class Donor():
         self.money_out_resolved = pd.DataFrame(
             columns=["receiver", "amount", "party", "type", "proportion"])  # money_out resolved to end candidates
         self.has_resolved = False  # indicates whether money_out_resolved has been successfully computed yet
+        self.pending_resolve = False # this is used to detect recursion loops in resolve_donations
 
     def __repr__(self):
         if self.money_out_resolved.empty:
@@ -70,6 +71,7 @@ class Donor():
         # TODO: check for second-level recursion problems, i.e. if PAC A -> PAC B -> PAC C -> PAC A
         # recursion is detected if PAC A -> PAC A or if PAC A -> PAC B -> PAC A
         print(self.name)
+        self.pending_resolve = True
         if (self.has_resolved == True):
             return
         # reset the money_out_resolved dataframe
@@ -99,7 +101,7 @@ class Donor():
             if this_type == 'Candidate':
                 this_add = pd.DataFrame([[this_receiver, this_amount, this_party, this_type, 0]],
                                         columns=["receiver", "amount", "party", "type", "proportion"])
-                self.money_out_resolved = self.money_out_resolved.append(this_add)
+                self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
             else:
                 # this_amount can only be negative for a candidate (for IE spending against)
                 if this_amount<0:
@@ -119,14 +121,27 @@ class Donor():
                             # mark self as resolved
                             self.has_resolved = True
                             return
-                    # check if receiver is also a donor to self, if so then fix to avoid recursion loop
-                    if this_receiver in self.money_in.donor.values:
-                        # remove line from self.money_in and this_receiver's money_out
-                        fulldata.all_donors[this_receiver].money_out = fulldata.all_donors[this_receiver].money_out.loc[
-                            fulldata.all_donors[this_receiver].money_out.receiver != self.name,:]
-                        self.money_in = self.money_in.loc[self.money_in.donor != this_receiver,:]
-                        # TODO: instead of the above 3 lines, determine smaller amount and subtract that from the loop
-                        # and then remove the newly zero donation
+                    # check for recursion loop
+                    # TODO: instead of skipping the donation entirely, find a way to subtract the minimum possible?
+                    if fulldata.all_donors[this_receiver].pending_resolve == True:
+                        # we found a recursion loop between self and this_receiver (and possibly others)
+                        # since this_receiver is already pending.
+                        # print info and skip this donation to break the recursion
+                        print('In donor.resolve_donations: Recursion loop - skipped contribution')
+                        print('Self: '+self.name+'  Receiver: '+this_receiver+'  Amount: '+this_amount)
+                        continue  # skip this donation and go on to the next
+                    ### Could still use the code block below just for PAC A -> PAC B -> PAC A type recursion - looks ahead
+                    ### and drops the donation in the next one to avoid the problem.  Code above solves this too with
+                    ### same effect and works for multilayer recursion (A to B to C to D to A)
+                    #
+                    # # check if receiver is also a donor to self, if so then fix to avoid recursion loop
+                    # if this_receiver in self.money_in.donor.values:
+                    #     # remove line from self.money_in and this_receiver's money_out
+                    #     fulldata.all_donors[this_receiver].money_out = fulldata.all_donors[this_receiver].money_out.loc[
+                    #         fulldata.all_donors[this_receiver].money_out.receiver != self.name,:]
+                    #     self.money_in = self.money_in.loc[self.money_in.donor != this_receiver,:]
+                    ###
+                    #
                     # check if the receiver is resolved yet, if not, tell them to resolve
                     if not (fulldata.all_donors[this_receiver].has_resolved):
                         fulldata.all_donors[this_receiver].resolve_donations(fulldata)
@@ -142,7 +157,8 @@ class Donor():
                     # Resolve donations based on proportions of outgoing donations:
                     amount_resolved = this_amount * pac_resolved.loc[:, 'proportion']
 
-                    ###### Old code section, no longer used
+                    ##### Old code section, no longer used
+                    ##### Don't need prop_in and all these checks since we explicitly compute unspent balance
                     # Adjust based on proportion of money_in, but not if the PAC must have had a starting balance
                     if fulldata.all_donors[this_receiver].total_in>=fulldata.all_donors[this_receiver].total_out:
                         prop_in = this_amount / fulldata.all_donors[this_receiver].money_in.amount.sum()
@@ -181,15 +197,16 @@ class Donor():
                     #
                     # construct DataFrame from pac_resolved and amount_resolved (proportion will be computed later)
                     this_add = pac_resolved.copy()
-                    this_add.loc[:, 'amount'] = amount_resolved
+                    this_add.loc[:, 'amount'] = amount_resolved #relying on the order to be the same as it was when we got the proportions
                     this_add.loc[:, 'proportion'] = 0  # set to zero for now, it will be computed later
-                    self.money_out_resolved = self.money_out_resolved.append(this_add)
+                    self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
                 else:
                     # we didn't find this pac in our data, so we don't know where the money went!
                     # this should never happen, because if we saw a donation, we would have created an entry
+                    # TODO: raise an error here, this shouldn't happen
                     this_add = pd.DataFrame([[this_receiver, this_amount, this_party, 'Unresolved PAC', 0]],
                                             columns=["receiver", "amount", "party", "type", "proportion"])
-                    self.money_out_resolved = self.money_out_resolved.append(this_add)
+                    self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
         # note resolution may have many intermediate pacs donating to the same candidates, so have to sum again
         # TODO: if negative and positive donations to same candidate, these will cancel out in sum
         self.money_out_resolved = pd.DataFrame(
@@ -199,11 +216,11 @@ class Donor():
         if amount_balance>0:
             this_add = pd.DataFrame([[self.name, amount_balance , my_party_name, 'PAC Unspent Balance', 0]],
                                     columns=["receiver", "amount", "party", "type", "proportion"])
-            self.money_out_resolved = self.money_out_resolved.append(this_add)
-            #store the unspent balance in money_out also so it balances
+            self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
+            # store the unspent balance in money_out also so it balances
             this_add2 = pd.DataFrame([[self.name, amount_balance, my_party_name, 'PAC Unspent Balance']],
                                     columns=["receiver", "amount", "party", "type"])
-            self.money_out = self.money_out.append(this_add2)
+            self.money_out = self.money_out.append(this_add2, ignore_index=True)
         # when all donations have been resolved
         # get total donation amount and divide to obtain proportion for each candidate
         # use abs() in denominator since amounts can be negative (e.g. from an IE)
@@ -211,6 +228,7 @@ class Donor():
         self.money_out_resolved.loc[:, 'proportion'] = self.money_out_resolved.loc[:,
                                                        'amount'] / self.money_out_resolved.loc[:, 'amount'].abs().sum()
         # mark self as resolved
+        self.pending_resolve = False
         self.has_resolved = True
         # print('Resolved with donations')
         return
@@ -284,7 +302,7 @@ class Data():
         # if cand_list is length 1, this for loop will just be skipped, which is fine
         for i in cand_list[1:]:
             temp = self.all_candidates.pop(i)  # will raise error if i is not a valid key
-            new_cand.money_in = new_cand.money_in.append(temp.money_in)
+            new_cand.money_in = new_cand.money_in.append(temp.money_in, ignore_index=True)
         # sum_donations again
         new_cand.sum_donations()  # this sum will erase if a donor made donations both for and against
         self.all_candidates[new_cand.name] = new_cand
@@ -327,8 +345,8 @@ class Data():
 
         for i in donor_list[1:]:
             temp = self.all_donors.pop(i)  # will raise error if i is not a valid key
-            new_donor.money_in = new_donor.money_in.append(temp.money_in)
-            new_donor.money_out = new_donor.money_out.append(temp.money_out)
+            new_donor.money_in = new_donor.money_in.append(temp.money_in, ignore_index=True)
+            new_donor.money_out = new_donor.money_out.append(temp.money_out, ignore_index=True)
             # check if donor has established a type yet
             # when we get to a donor created by that donor's report in the original data (instead of created by
             # the receiver's report), then it will have a non-blank party
@@ -377,7 +395,7 @@ def merge_ie_pac(donor_ie, data2, donor_key):
     # ie data has no money_in, so just get donor_ie.money_out and merge with data2.all_donors[donor_key].money_out
     # then get all recipients donor_ie.money_out.loc[:,'receiver'] and update in data2.all_candidates
     #
-    data2.all_donors[donor_key].money_out = data2.all_donors[donor_key].money_out.append(donor_ie.money_out)
+    data2.all_donors[donor_key].money_out = data2.all_donors[donor_key].money_out.append(donor_ie.money_out, ignore_index=True)
     cand_receivers = [i for i in donor_ie.money_out['receiver'] if donor_ie.money_out['type']=='Candidate' ]
     ballot_receivers = [i for i in donor_ie.money_out['receiver'] if donor_ie.money_out['type'] == 'Ballot']
     # todo: make sure for statements skip quietly if iteration set is empty
@@ -509,7 +527,7 @@ def load_ie_data(filename):
             this_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                     columns=['donor', 'donor_id', 'amount'])
             data1.all_candidates[this_receiver_name].money_in = data1.all_candidates[
-                this_receiver_name].money_in.append(this_add)
+                this_receiver_name].money_in.append(this_add, ignore_index=True)
         # todo: check that this_cand.party = this_receiver_party
         # what to do if they are different?
         # data1.all_candidates[this_receiver_name].party = this_receiver_party
@@ -519,7 +537,7 @@ def load_ie_data(filename):
             new_cand = Candidate()
             new_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                    columns=['donor', 'donor_id', 'amount'])
-            new_cand.money_in = new_cand.money_in.append(new_add)
+            new_cand.money_in = new_cand.money_in.append(new_add, ignore_index=True)
             new_cand.name = this_receiver_name
             new_cand.type = this_receiver_type
             new_cand.party = this_receiver_party
@@ -530,7 +548,7 @@ def load_ie_data(filename):
             # if so, add to that donor data
             this_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                     columns=["receiver", "amount", "party", "type"])
-            data1.all_donors[this_giver_name].money_out = data1.all_donors[this_giver_name].money_out.append(this_add)
+            data1.all_donors[this_giver_name].money_out = data1.all_donors[this_giver_name].money_out.append(this_add, ignore_index=True)
         else:
             # create new donor and add them
             new_donor = Donor()
@@ -538,7 +556,7 @@ def load_ie_data(filename):
             new_donor.filer_id = this_giver_id
             new_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                    columns=["receiver", "amount", "party", "type"])
-            new_donor.money_out = new_donor.money_out.append(new_add)
+            new_donor.money_out = new_donor.money_out.append(new_add, ignore_index=True)
             data1.all_donors[this_giver_name] = new_donor
 
     return data1
@@ -611,7 +629,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 this_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                         columns=['donor', 'donor_id', 'amount'])
                 data2.all_candidates[this_receiver_name].money_in = data2.all_candidates[
-                    this_receiver_name].money_in.append(this_add)
+                    this_receiver_name].money_in.append(this_add, ignore_index=True)
             # todo: check that this_cand.party = this_receiver_party
             # data2.all_candidates[this_receiver_id] = this_cand
             else:
@@ -619,7 +637,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 new_cand = Candidate()
                 new_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                        columns=['donor', 'donor_id', 'amount'])
-                new_cand.money_in = new_cand.money_in.append(new_add)
+                new_cand.money_in = new_cand.money_in.append(new_add, ignore_index=True)
                 new_cand.name = this_receiver_name
                 new_cand.type = this_receiver_type
                 new_cand.party = this_receiver_party
@@ -632,7 +650,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 this_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                         columns=["receiver", "amount", "party", "type"])
                 data2.all_donors[this_giver_name].money_out = data2.all_donors[this_giver_name].money_out.append(
-                    this_add)
+                    this_add, ignore_index=True)
             else:
                 # create new donor and add
                 new_donor = Donor()
@@ -640,7 +658,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 # new_donor.filer_id = this_giver_id #no donor id from C3 data
                 new_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                        columns=["receiver", "amount", "party", "type"])
-                new_donor.money_out = new_donor.money_out.append(new_add)
+                new_donor.money_out = new_donor.money_out.append(new_add, ignore_index=True)
                 data2.all_donors[this_giver_name] = new_donor
         else:  # receiver type is not Candidate, should only be Political Committee
             # check if we have seen this pac before (maybe as a donor) and update data
@@ -648,7 +666,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 this_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                         columns=['donor', 'donor_id', 'amount'])
                 data2.all_donors[this_receiver_name].money_in = data2.all_donors[this_receiver_name].money_in.append(
-                    this_add)
+                    this_add, ignore_index=True)
                 # if we have only seen this pac before as a donor, then we don't have a value for type and filer_id
                 if data2.all_donors[this_receiver_name].type != this_receiver_type:
                     data2.all_donors[this_receiver_name].type = this_receiver_type
@@ -658,7 +676,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 new_pac = Donor()
                 new_add = pd.DataFrame([[this_giver_name, this_giver_id, this_amount]],
                                        columns=['donor', 'donor_id', 'amount'])
-                new_pac.money_in = new_pac.money_in.append(new_add)
+                new_pac.money_in = new_pac.money_in.append(new_add, ignore_index=True)
                 new_pac.name = this_receiver_name
                 new_pac.type = this_receiver_type
                 new_pac.filer_id = this_receiver_id
@@ -670,7 +688,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 this_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                         columns=["receiver", "amount", "party", "type"])
                 data2.all_donors[this_giver_name].money_out = data2.all_donors[this_giver_name].money_out.append(
-                    this_add)
+                    this_add, ignore_index=True)
             else:
                 # create new donor and add
                 new_donor = Donor()
@@ -678,7 +696,7 @@ def load_pac_data(filename, nrows=0, debug=True):
                 # new_donor.filer_id = this_giver_id #no donor id from C3 data
                 new_add = pd.DataFrame([[this_receiver_name, this_amount, this_receiver_party, this_receiver_type]],
                                        columns=["receiver", "amount", "party", "type"])
-                new_donor.money_out = new_donor.money_out.append(new_add)
+                new_donor.money_out = new_donor.money_out.append(new_add, ignore_index=True)
                 data2.all_donors[this_giver_name] = new_donor
     end = time.time()
     if debug:
@@ -753,6 +771,7 @@ if __name__ == '__main__':
                     donor_change.oldnames == 'WASHINGTON REALTORS POLITICAL ACTION COMMITTEE'] = 'WA REALTORS PAC'
     donor_change.newnames.loc[donor_change.oldnames == 'FRIENDS OF ELAINE PHELPS'] = 'No Match'
     donor_change.newnames.loc[donor_change.oldnames == 'WA FORWARD'] = 'WA FORWARD (THE LEADERSHIP COUNCIL)'
+    donor_change.newnames.loc[donor_change.oldnames == 'BUILDING INDUSTRY ASSOCIATION OF CLARK COUNTY BUILDING INDUSTRY GROUP'] = 'BUILDING INDUSTRY ASSOCIATION'
     # write out the mapping for further manual inspection
     f = open("log-donor name matching IE to PAC.txt", "w")
     for i in range(len(donor_change.oldnames)):
@@ -853,10 +872,7 @@ if __name__ == '__main__':
                     data_pac.all_donors[this_pac_label[1]].money_in = data_pac.all_donors[
                         this_pac_label[1]].money_in.append(this_add, ignore_index=True)
 
-    # additional work needed in combining donors
-    # TODO: mark all party organizations with their party so donor percentages reflect their party
-    # don't let negative IE spending offset positive spending on a candidate
-
+    # mark all party organizations with their party so donor percentages reflect their party
     data_pac.party_pac_dict = {'WA STATE DEMOCRATIC PARTY':'DEMOCRAT',
                                'WA STATE REPUBLICAN PARTY': 'REPUBLICAN',
                                'SENATE REPUBLICAN CAMPAIGN COMMITTEE': 'REPUBLICAN',
@@ -906,3 +922,5 @@ if __name__ == '__main__':
     # print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
 
     # save_to_file(data_pac, 'data_pac.pkl')
+
+    # todo: don't let negative IE spending offset positive spending on a candidate

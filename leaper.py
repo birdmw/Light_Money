@@ -112,12 +112,13 @@ class Donor():
                     if this_receiver == self.name:
                         # we are in a recursion loop because this PAC donated to itself
                         # raise warning and ignore this donation
-                        print('Recursion loop: Ignoring donation to self by '+self.name)
+                        print('Recursion loop: Ignoring donation to self by ' + self.name)
                         # if this is the only donation then this is a terminal PAC, so set money_out_resolved and return
-                        if (self.money_out_resolved.empty)&(i==(n_donations-1)):
-                            self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), my_party_name, 'Terminal PAC', 1.0]],
-                                                                   columns=["receiver", "amount", "party", "type",
-                                                                            "proportion"])
+                        if (self.money_out_resolved.empty) & (i == (n_donations - 1)):
+                            self.money_out_resolved = pd.DataFrame(
+                                [[self.name, self.money_in.amount.abs().sum(), my_party_name, 'Terminal PAC', 1.0]],
+                                columns=["receiver", "amount", "party", "type",
+                                         "proportion"])
                             # mark self as resolved
                             self.has_resolved = True
                             return
@@ -128,7 +129,7 @@ class Donor():
                         # since this_receiver is already pending.
                         # print info and skip this donation to break the recursion
                         print('In donor.resolve_donations: Recursion loop - skipped contribution')
-                        print('Self: '+self.name+'  Receiver: '+this_receiver+'  Amount: '+this_amount)
+                        print('Self: '+self.name+'  Receiver: '+this_receiver+'  Amount: '+str(this_amount))
                         continue  # skip this donation and go on to the next
                     ### Could still use the code block below just for PAC A -> PAC B -> PAC A type recursion - looks ahead
                     ### and drops the donation in the next one to avoid the problem.  Code above solves this too with
@@ -167,24 +168,19 @@ class Donor():
                     if prop_in>1.0:
                         raise ValueError('in resolve_donations: this_amount greater than sum of money_in')
                     # Limit amount_resolved to the amount that was spent (elementwise):
-                    if any( (prop_in*abs(pac_resolved.loc[:, 'amount']))<(0.9999*abs(amount_resolved) )):
+                    if any( (prop_in*abs(pac_resolved.loc[:, 'amount']))<(0.999*abs(amount_resolved) )):
                         temp_filter = ((amount_resolved>=0)*2)-1 # save the signs of each element
                         #expanding this to debug
                         # TODO: remove this debugging code.  This is fixed, and this section should not be reached.
                         amount_resolved_index = amount_resolved.index
                         temp1 = prop_in * pac_resolved.loc[:, 'amount']
                         temp2 = temp1.abs()
-                        print(' ')
-                        print(self.money_out)
-                        print(self.money_in)
+                        print('From '+self.name+' to '+this_receiver)
                         print(prop_in)
                         print(this_amount)
-                        print(this_receiver)
                         print(i)
                         print(amount_resolved)
                         print(temp1)
-                        print(amount_resolved.index)
-                        print(temp1.index)
 
                         temp3 = amount_resolved.abs()
                         #temp2.index = amount_resolved_index
@@ -192,12 +188,12 @@ class Donor():
                         temp5 = temp_filter*temp4
                         amount_resolved = temp5
                         print(temp5)
-                        # amount_resolved = temp_filter*(amount_resolved.abs().combine(abs(prop_in*pac_resolved.loc[:, 'amount']),min))
                     ############# end of old code section
                     #
                     # construct DataFrame from pac_resolved and amount_resolved (proportion will be computed later)
                     this_add = pac_resolved.copy()
-                    this_add.loc[:, 'amount'] = amount_resolved #relying on the order to be the same as it was when we got the proportions
+                    # relying on the order of amount to be the same as it was when we got the proportions
+                    this_add.loc[:, 'amount'] = amount_resolved
                     this_add.loc[:, 'proportion'] = 0  # set to zero for now, it will be computed later
                     self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
                 else:
@@ -207,20 +203,31 @@ class Donor():
                     this_add = pd.DataFrame([[this_receiver, this_amount, this_party, 'Unresolved PAC', 0]],
                                             columns=["receiver", "amount", "party", "type", "proportion"])
                     self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
-        # note resolution may have many intermediate pacs donating to the same candidates, so have to sum again
-        # TODO: if negative and positive donations to same candidate, these will cancel out in sum
-        self.money_out_resolved = pd.DataFrame(
-            self.money_out_resolved.groupby(["receiver", "party", "type", "proportion"]).sum()).reset_index()
-        # if this pac is reporting more money_in than money_out, then record it as unspent
-        amount_balance = self.money_in.amount.abs().sum() - self.money_out.amount.abs().sum()
-        if amount_balance>0:
-            this_add = pd.DataFrame([[self.name, amount_balance , my_party_name, 'PAC Unspent Balance', 0]],
+        # check if money_out_resolved is empty (might have skipped all donations due to recursion loops)
+        if self.money_out_resolved.empty:
+            # mark unspent if there is money_in.  first check if there is money_in
+            if self.money_in.empty:  # can't be recursion loop if no money in
+                raise ValueError('resolve_donations: money_in and money_out_resolved cant both be empty')
+            this_add = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), my_party_name, 'PAC Unspent Balance', 0]],
                                     columns=["receiver", "amount", "party", "type", "proportion"])
             self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
-            # store the unspent balance in money_out also so it balances
-            this_add2 = pd.DataFrame([[self.name, amount_balance, my_party_name, 'PAC Unspent Balance']],
-                                    columns=["receiver", "amount", "party", "type"])
-            self.money_out = self.money_out.append(this_add2, ignore_index=True)
+        else:
+            # note resolution may have many intermediate pacs donating to the same candidates, so have to sum again
+            # TODO: if negative and positive donations to same candidate, these will cancel out in sum
+            self.money_out_resolved = pd.DataFrame(
+                self.money_out_resolved.groupby(["receiver", "party", "type", "proportion"]).sum()).reset_index()
+            # if this pac is reporting more money_in than money_out, then record it as unspent
+            amount_balance = self.money_in.amount.abs().sum() - self.money_out_resolved.amount.abs().sum()
+            # note the above line can be different from
+            # amount_balance = self.money_in.amount.abs().sum() - self.money_out.amount.abs().sum()
+            if amount_balance>0.01:
+                this_add = pd.DataFrame([[self.name, amount_balance , my_party_name, 'PAC Unspent Balance', 0]],
+                                        columns=["receiver", "amount", "party", "type", "proportion"])
+                self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
+                # store the unspent balance in money_out also so it balances?
+                # this_add2 = pd.DataFrame([[self.name, amount_balance, my_party_name, 'PAC Unspent Balance']],
+                #                         columns=["receiver", "amount", "party", "type"])
+                # self.money_out = self.money_out.append(this_add2, ignore_index=True)
         # when all donations have been resolved
         # get total donation amount and divide to obtain proportion for each candidate
         # use abs() in denominator since amounts can be negative (e.g. from an IE)
@@ -327,9 +334,9 @@ class Data():
                 raise ValueError('combine_donors: donor_list should be string or list of strings')
         # check if all strings in donor_list are valid keys in self.all_donors
         if not set(donor_list).issubset(self.all_donors.keys()):
-            print('combine_donors error: donor_list contains invalid key(s)')
+            print('combine_donors warning: ignoring invalid key(s) in donor_list')
             print(set(donor_list)-set(self.all_donors.keys()))
-            return
+            donor_list = list(set(donor_list)&set(self.all_donors.keys()))
         # first item in donor_list will be the new key
         first_donor = self.all_donors.pop(donor_list[0])
         new_donor = Donor()

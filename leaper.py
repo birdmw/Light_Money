@@ -11,6 +11,8 @@ from manual_corrections import pac_correction
 from manual_corrections import ie_correction
 from synonyms import do_pac_synonyms
 from synonyms import do_ie_synonyms
+from synonyms import add_synonyms
+from synonyms import do_pac_synonyms2
 from difflib import get_close_matches
 # from fuzzywuzzy import process
 
@@ -71,9 +73,9 @@ class Donor():
         # TODO: check for second-level recursion problems, i.e. if PAC A -> PAC B -> PAC C -> PAC A
         # recursion is detected if PAC A -> PAC A or if PAC A -> PAC B -> PAC A
         print(self.name)
-        self.pending_resolve = True
         if (self.has_resolved == True):
             return
+        self.pending_resolve = True
         # reset the money_out_resolved dataframe
         self.money_out_resolved = pd.DataFrame(columns=["receiver", "amount", "party", "type", "proportion"])
         # check if this is a party pac
@@ -87,10 +89,13 @@ class Donor():
             self.money_out_resolved = pd.DataFrame([[self.name, self.money_in.amount.abs().sum(), my_party_name, 'Terminal PAC', 1.0]],
                                                    columns=["receiver", "amount", "party", "type", "proportion"])
             # mark self as resolved
+            self.pending_resolve = False
             self.has_resolved = True
             # print('Resolved no donations')
             return
-        # for each line in money_out, check if it is to a candidate or pac
+        # for each line in money_out, check if it is to a candidate or pac, and update money_out_resolved
+        # need to store list of zero receivers to process after this for loop
+        zero_receivers = []
         for i in range(n_donations):
             # if candidate, then the amount is 100% to that candidate, so nothing to do
             # if pac, then get candidates/proportions from that pac, and allocate amounts accordingly
@@ -120,10 +125,59 @@ class Donor():
                                 columns=["receiver", "amount", "party", "type",
                                          "proportion"])
                             # mark self as resolved
+                            self.pending_resolve = False
                             self.has_resolved = True
                             return
-                    # check for recursion loop
-                    # TODO: instead of skipping the donation entirely, find a way to subtract the minimum possible?
+                        else:
+                            continue  # don't add to money_out_resolved since this was donation to self
+                    # check for recursion loop PAC A -> PAC B -> PAC A
+                    # check if receiver is also a donor to self, if so then fix to avoid recursion loop
+                    if this_receiver in self.money_in.donor.values:
+                        # get both amounts
+                        amount_to_me = fulldata.all_donors[this_receiver].money_out.loc[fulldata.all_donors[this_receiver].money_out.receiver == self.name, 'amount']
+                        amount_from_me = this_amount
+                        if amount_to_me > amount_from_me:
+                            # subtract amount_from_me from donation to me
+                            fulldata.all_donors[this_receiver].money_out.loc[fulldata.all_donors[this_receiver].money_out.receiver == self.name, 'amount'] = \
+                                fulldata.all_donors[this_receiver].money_out.loc[fulldata.all_donors[this_receiver].money_out.receiver == self.name, 'amount'] - amount_from_me
+                            self.money_in.loc[self.money_in.donor == this_receiver, 'amount'] = self.money_in.loc[self.money_in.donor == this_receiver, 'amount'] - amount_from_me
+                            # remove line from self.money_out and this_receiver's money_in
+                            fulldata.all_donors[this_receiver].money_in = fulldata.all_donors[this_receiver].money_in.loc[
+                                    fulldata.all_donors[this_receiver].money_in.donor != self.name,:]
+                            # self.money_out = self.money_out.loc[self.money_out.receiver != this_receiver,:]
+                            # can't edit this while we are iterating over it, have to remove it after for loop
+                            zero_receivers = zero_receivers + this_receiver # TODO: check this
+                            continue  # this donation from me to receiver is zero, so do not add to money_out_resolved
+                        elif amount_to_me < amount_from_me:
+                            # subtract amount_to_me from donation from me
+                            self.money_out.loc[self.money_out.receiver==this_receiver,'amount'] = self.money_out.loc[self.money_out.receiver==this_receiver,'amount'] - amount_to_me
+                            fulldata.all_donors[this_receiver].money_in.loc[fulldata.all_donors[this_receiver].money_in.donor == self.name, 'amount'] = \
+                                fulldata.all_donors[this_receiver].money_in.loc[fulldata.all_donors[this_receiver].money_in.donor == self.name, 'amount'] - amount_to_me
+                            # remove line from self.money_in and this_receiver's money_out
+                            fulldata.all_donors[this_receiver].money_out = fulldata.all_donors[this_receiver].money_out.loc[
+                                    fulldata.all_donors[this_receiver].money_out.receiver != self.name,:]
+                            self.money_in = self.money_in.loc[self.money_in.donor != this_receiver, :]
+                            # adjust this_amount
+                            this_amount = this_amount - amount_to_me
+                        elif amount_to_me == amount_from_me:
+                            # remove line from self.money_in and this_receiver's money_out and this_receiver's money_in
+                            fulldata.all_donors[this_receiver].money_out = fulldata.all_donors[this_receiver].money_out.loc[
+                                    fulldata.all_donors[this_receiver].money_out.receiver != self.name,:]
+                            fulldata.all_donors[this_receiver].money_in = fulldata.all_donors[this_receiver].money_in.loc[
+                                    fulldata.all_donors[this_receiver].money_in.donor != self.name,:]
+                            self.money_in = self.money_in.loc[self.money_in.donor != this_receiver, :]
+                            # self.money_out = self.money_out.loc[self.money_out.receiver != this_receiver,:]
+                            # can't edit this while we are iterating over it, have to remove it after for loop
+                            zero_receivers = zero_receivers + this_receiver  # TODO: check this
+                            continue  # this donation from me to receiver is zero, so do not add to money_out_resolved
+                        else:
+                            # this shouldn't happen, raise an error
+                            print(this_receiver)
+                            print(self.name)
+                            print(amount_to_me)
+                            print(amount_from_me)
+                            raise ValueError('in resolve_donations: cant compare amount_to_me and amount_from_me ')
+                    # now check for higher level recursion, e.g. A -> B -> C -> A
                     if fulldata.all_donors[this_receiver].pending_resolve == True:
                         # we found a recursion loop between self and this_receiver (and possibly others)
                         # since this_receiver is already pending.
@@ -131,18 +185,6 @@ class Donor():
                         print('In donor.resolve_donations: Recursion loop - skipped contribution')
                         print('Self: '+self.name+'  Receiver: '+this_receiver+'  Amount: '+str(this_amount))
                         continue  # skip this donation and go on to the next
-                    ### Could still use the code block below just for PAC A -> PAC B -> PAC A type recursion - looks ahead
-                    ### and drops the donation in the next one to avoid the problem.  Code above solves this too with
-                    ### same effect and works for multilayer recursion (A to B to C to D to A)
-                    #
-                    # # check if receiver is also a donor to self, if so then fix to avoid recursion loop
-                    # if this_receiver in self.money_in.donor.values:
-                    #     # remove line from self.money_in and this_receiver's money_out
-                    #     fulldata.all_donors[this_receiver].money_out = fulldata.all_donors[this_receiver].money_out.loc[
-                    #         fulldata.all_donors[this_receiver].money_out.receiver != self.name,:]
-                    #     self.money_in = self.money_in.loc[self.money_in.donor != this_receiver,:]
-                    ###
-                    #
                     # check if the receiver is resolved yet, if not, tell them to resolve
                     if not (fulldata.all_donors[this_receiver].has_resolved):
                         fulldata.all_donors[this_receiver].resolve_donations(fulldata)
@@ -203,6 +245,10 @@ class Donor():
                     this_add = pd.DataFrame([[this_receiver, this_amount, this_party, 'Unresolved PAC', 0]],
                                             columns=["receiver", "amount", "party", "type", "proportion"])
                     self.money_out_resolved = self.money_out_resolved.append(this_add, ignore_index=True)
+        # done with for loop, so finish removing the zero receivers
+        for i in zero_receivers:
+            # remove from self.money_out
+            self.money_out = self.money_out.loc[self.money_out.receiver != i, :]
         # check if money_out_resolved is empty (might have skipped all donations due to recursion loops)
         if self.money_out_resolved.empty:
             # mark unspent if there is money_in.  first check if there is money_in
@@ -569,7 +615,7 @@ def load_ie_data(filename):
     return data1
 
 
-def load_pac_data(filename, nrows=0, debug=True):
+def load_pac_data(filename, nrows=0, debug=True, name_dict = {}):
     # filename is the name of the data file to load
     # nrows: if 0, load all data; if >0, only load first nrows
     # check if file exists, if so load it
@@ -607,6 +653,20 @@ def load_pac_data(filename, nrows=0, debug=True):
     if nrows>campdata.shape[0]:
         print('Loading full data set')
         nrows = campdata.shape[0]
+
+    # convert names using synonym dictionary
+    if name_dict:
+        # could probably do this faster by iterating through name_dict.keys() instead of through nrows
+        for i in range(nrows):
+            this_row = campdata.iloc[i,]
+            this_giver_name = this_row["contributor_name"]
+            this_receiver_name = this_row['filer_name']
+            if this_giver_name in name_dict.keys():
+                col_index = campdata.columns.get_loc('contributor_name')
+                campdata.iloc[i, col_index] = name_dict[this_giver_name]
+            if this_receiver_name in name_dict.keys():
+                col_index = campdata.columns.get_loc('filer_name')
+                campdata.iloc[i,col_index] = name_dict[this_receiver_name]
 
     start = time.time()
     data2 = Data()
@@ -715,12 +775,20 @@ def load_pac_data(filename, nrows=0, debug=True):
 if __name__ == '__main__':
     print("Running Main")
 
+    print('Generate synonym dictionary')
+    start = time.time()
+    donor_synonym_dict = {}  # dict of synonym:main_name for donors
+    donor_synonym_dict = do_pac_synonyms2(donor_synonym_dict)
+    end = time.time()
+    print(end - start)
+
     print("Read in and process IE data")
     data_ie = load_ie_data('data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181110.csv')
 
     print("Read in and process PAC/Candidate data")
     print('If there is a DtypeWarning about columns (11,23) we can ignore it')
-    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv')
+    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv',
+                             name_dict=donor_synonym_dict)
     #data_pac = load_pac_data('data\small test data.csv')
 
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
@@ -733,7 +801,7 @@ if __name__ == '__main__':
 
     print('Combine entities which are actually synonyms of a single entity')
     start = time.time()
-    do_pac_synonyms(data_pac)
+    #do_pac_synonyms(data_pac)
     do_ie_synonyms(data_ie)
     end = time.time()
     print(end - start)
@@ -801,9 +869,11 @@ if __name__ == '__main__':
         this_type = data_ie.all_candidates[i].type
         # if there is only one donor, it will return as a string, so convert to a list to use with the for statement
         if isinstance(this_donors, basestring):
-            this_donors = [this_donors]
+            this_donors2 = [this_donors]
+        else:
+            this_donors2 = this_donors  # doing this to avoid the setting with copy warning on this_donors
         # for each donor in this candidate's money_in:
-        for j in this_donors:
+        for j in this_donors2:
             # get the amount from donor j to candidate i
             this_amount = data_ie.all_candidates[i].money_in.amount.loc[this_donors == j].values[0]
             # get the new pac donor name
@@ -882,6 +952,8 @@ if __name__ == '__main__':
     # mark all party organizations with their party so donor percentages reflect their party
     data_pac.party_pac_dict = {'WA STATE DEMOCRATIC PARTY':'DEMOCRAT',
                                'WA STATE REPUBLICAN PARTY': 'REPUBLICAN',
+                               'LOCAL DEMOCRATIC ORGS':'DEMOCRAT',
+                               'LOCAL REPUBLICAN ORGS': 'REPUBLICAN',
                                'SENATE REPUBLICAN CAMPAIGN COMMITTEE': 'REPUBLICAN',
                                'HOUSE REPUBLICAN ORGANIZATION COMMITTEE': 'REPUBLICAN',
                                'HOUSE DEMOCRATIC CAUCUS CAMPAIGN COMMITTEE':'DEMOCRAT',

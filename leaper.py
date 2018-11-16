@@ -117,13 +117,18 @@ class Donor():
                     if this_receiver == self.name:
                         # we are in a recursion loop because this PAC donated to itself
                         # raise warning and ignore this donation
-                        print('Recursion loop: Ignoring donation to self by ' + self.name)
+                        print('resolve_donations: Recursion loop, ignoring donation to self by ' + self.name)
+                        # remove from money_in and money_out
+                        self.money_in = self.money_in.loc[self.money_in.donor != this_receiver, :]
+                        zero_receivers = zero_receivers + [this_receiver]  # this will remove from money_out after for loop
                         # if this is the only donation then this is a terminal PAC, so set money_out_resolved and return
                         if (self.money_out_resolved.empty) & (i == (n_donations - 1)):
                             self.money_out_resolved = pd.DataFrame(
                                 [[self.name, self.money_in.amount.abs().sum(), my_party_name, 'Terminal PAC', 1.0]],
                                 columns=["receiver", "amount", "party", "type",
                                          "proportion"])
+                            # remove from money_out since we are not continuing for loop (should make it empty)
+                            self.money_out = self.money_out.loc[self.money_out.receiver != this_receiver, :]
                             # mark self as resolved
                             self.pending_resolve = False
                             self.has_resolved = True
@@ -133,9 +138,15 @@ class Donor():
                     # check for recursion loop PAC A -> PAC B -> PAC A
                     # check if receiver is also a donor to self, if so then fix to avoid recursion loop
                     if this_receiver in self.money_in.donor.values:
+                        print('resolve_donations: Recursion loop from '+self.name+' to '+this_receiver)
                         # get both amounts
                         amount_to_me = fulldata.all_donors[this_receiver].money_out.loc[fulldata.all_donors[this_receiver].money_out.receiver == self.name, 'amount']
+                        if len(amount_to_me)==1:
+                            amount_to_me = amount_to_me.iloc[0]
+                        else:
+                            raise ValueError('resolve_donations: amount_to_me not length 1')
                         amount_from_me = this_amount
+                        print('From: '+str(amount_from_me)+'  To: '+str(amount_to_me))
                         if amount_to_me > amount_from_me:
                             # subtract amount_from_me from donation to me
                             fulldata.all_donors[this_receiver].money_out.loc[fulldata.all_donors[this_receiver].money_out.receiver == self.name, 'amount'] = \
@@ -146,7 +157,7 @@ class Donor():
                                     fulldata.all_donors[this_receiver].money_in.donor != self.name,:]
                             # self.money_out = self.money_out.loc[self.money_out.receiver != this_receiver,:]
                             # can't edit this while we are iterating over it, have to remove it after for loop
-                            zero_receivers = zero_receivers + this_receiver # TODO: check this
+                            zero_receivers = zero_receivers + [this_receiver]
                             continue  # this donation from me to receiver is zero, so do not add to money_out_resolved
                         elif amount_to_me < amount_from_me:
                             # subtract amount_to_me from donation from me
@@ -168,7 +179,7 @@ class Donor():
                             self.money_in = self.money_in.loc[self.money_in.donor != this_receiver, :]
                             # self.money_out = self.money_out.loc[self.money_out.receiver != this_receiver,:]
                             # can't edit this while we are iterating over it, have to remove it after for loop
-                            zero_receivers = zero_receivers + this_receiver  # TODO: check this
+                            zero_receivers = zero_receivers + [this_receiver]
                             continue  # this donation from me to receiver is zero, so do not add to money_out_resolved
                         else:
                             # this shouldn't happen, raise an error
@@ -184,6 +195,12 @@ class Donor():
                         # print info and skip this donation to break the recursion
                         print('In donor.resolve_donations: Recursion loop - skipped contribution')
                         print('Self: '+self.name+'  Receiver: '+this_receiver+'  Amount: '+str(this_amount))
+                        # remove line from self.money_out and this_receiver's money_in
+                        fulldata.all_donors[this_receiver].money_in = fulldata.all_donors[this_receiver].money_in.loc[
+                                                fulldata.all_donors[this_receiver].money_in.donor != self.name, :]
+                        # self.money_out = self.money_out.loc[self.money_out.receiver != this_receiver,:]
+                        # can't edit this while we are iterating over it, have to remove it after for loop
+                        zero_receivers = zero_receivers + [this_receiver]
                         continue  # skip this donation and go on to the next
                     # check if the receiver is resolved yet, if not, tell them to resolve
                     if not (fulldata.all_donors[this_receiver].has_resolved):

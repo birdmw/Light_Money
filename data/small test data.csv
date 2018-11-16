@@ -18,3 +18,8 @@ id,report_number,origin,filer_id,type,filer_name,first_name,middle_initial,last_
 17,17,C3,BBB 123,Candidate,Candidate B,,,,,,,REPUBLICAN,,,,,,,5000,,,,,,Caucus,B House Caucus,,,,,,,,,,
 18,18,C3,BBB 123,Candidate,Candidate B,,,,,,,REPUBLICAN,,,,,,,5000,,,,,,Caucus,B House Caucus,,,,,,,,,,
 19,19,C3,BBB 123,Candidate,Candidate B,,,,,,,REPUBLICAN,,,,,,,5000,,,,,,Caucus,B House Caucus,,,,,,,,,,
+20,20,C3,qqq4,Political Committee,PAC 444,,,,,,,,,,,,,,5000,,,,,,Political Action Committee,PAC 444,,,,,,,,,,
+21,21,C3,qqq5,Political Committee,PAC 555,,,,,,,,,,,,,,5000,,,,,,Political Action Committee,PAC 444,,,,,,,,,,
+22,22,C3,qqq6,Political Committee,PAC 667,,,,,,,,,,,,,,4000,,,,,,Political Action Committee,PAC 555,,,,,,,,,,
+23,23,C3,qqq4,Political Committee,PAC 444,,,,,,,,,,,,,,1000,,,,,,Political Action Committee,PAC 555,,,,,,,,,,
+24,24,C3,qqq4,Political Committee,PAC 444,,,,,,,,,,,,,,1000,,,,,,Political Action Committee,PAC 667,,,,,,,,,,

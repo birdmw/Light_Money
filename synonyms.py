@@ -1514,4 +1514,28 @@ def do_pac_synonyms2(donor_synonym_dict):
 
     donor_synonym_dict = add_synonyms(donor_synonym_dict, ['WALMART', 'WAL-MART STORES, INC.', 'WALMART STORES, INC'])
 
+    donor_synonym_dict = add_synonyms(donor_synonym_dict, ['WHATCOM DEMOCRATS',
+                                                           'WHATCOM COUNTY DEMOCRATIC CENTRAL COMMITTEE',
+                                                           'WHATCOM CO DEMO CENT COMM EXEMPT',
+                                                           'WHATCOM DEMOCRATS EBOARD',
+                                                           'WHATCOM COUNTY DEMOCRATIC WOMENS CLUB',
+                                                           'WHATCOM CO DEMO CENT COMM NON EXEMPT',
+                                                           'WHATCOM COUNTY DEMOCRATIC PARTY',
+                                                           'WHATCOM COUNTY DEMOCRATS',
+                                                           "WHATCOM COUNTY DEMOCRATIC WOMEN'S CLUB",
+                                                           'WHATCOME CO DEMOCRATIC WOMENS CLUB',
+                                                           'WHATCOM CO DEMOCRATIC PARTY'])
+
+    donor_synonym_dict = add_synonyms(donor_synonym_dict, ['WHATCOM REPUBLICANS',
+                                                           'WHATCOM COUNTY REPUBLICAN PARTY',
+                                                           'WHATCOM CO REPUB PARTY EXEMPT',
+                                                           'REPUBLICAN WOMEN OF WHATCOM COUNTY',
+                                                           'WHATCOM CO REPUB PARTY NON EXEMPT'])
+
+    donor_synonym_dict = add_synonyms(donor_synonym_dict, ['WHATCOM COUNTY AFFORDABLE HOUSING COUNCIL',
+                                                           'WHATCOM CO AFFORDABLE HOUSING COUNCIL'])
+
+    donor_synonym_dict = add_synonyms(donor_synonym_dict, ['WHATCOM WELL WATER',
+                                                           'WHATCOM COUNTY WELL WATER'])
+
     return donor_synonym_dict

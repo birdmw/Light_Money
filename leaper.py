@@ -896,7 +896,8 @@ if __name__ == '__main__':
             # get the new pac donor name
             new_donor = donor_change.newnames.loc[donor_change.oldnames == j].values[0]
             # change the old ie donor name to the new pac donor name
-            data_ie.all_candidates[i].money_in.donor.loc[this_donors == j] = new_donor
+            # TODO: Next line gives "set on copy of slice" warning.  Tested and it works.  How to avoid warning?
+            data_ie.all_candidates[i].money_in.donor.loc[this_donors2 == j] = new_donor
             # if the new name is 'No Match' then this donor is not in data_pac;
             # so don't update data_pac, give a log message showing amount, and after for loop, drop the no match rows
             if new_donor == 'No Match':
@@ -1007,8 +1008,8 @@ if __name__ == '__main__':
     start = time.time()
     save_to_file(data_pac, 'data_pac.pkl')
     # for i in data_pac.all_donors.keys(): # for processing all donors
-    #for i in donors_interest:
-    #    data_pac.all_donors[i].resolve_donations(data_pac)
+    for i in donors_interest:
+        data_pac.all_donors[i].resolve_donations(data_pac)
     end = time.time()
     print(end - start)
 

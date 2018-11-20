@@ -9,18 +9,16 @@ import cPickle as pickle
 from collections import OrderedDict
 from manual_corrections import pac_correction
 from manual_corrections import ie_correction
-from synonyms import do_pac_synonyms
 from synonyms import do_ie_synonyms
 from synonyms import add_synonyms
 from synonyms import do_pac_synonyms2
+from donors_of_interest import make_donors_interest
 from difflib import get_close_matches
 # from fuzzywuzzy import process
 
 # use cases:
 # 1. search by contributor & summarize by party
-# 2. summarize by candidate votes on a bill
-#
-# Note that IEs and donations to losing candidates will not be counted in bill votes
+# 2. summarize by candidate votes on a bill - IEs and donations to losing candidates will not be counted in bill votes
 
 class Donor():
 
@@ -43,7 +41,7 @@ class Donor():
     def __repr__(self):
         if self.money_out_resolved.empty:
             return "<Name:%s ID:%s Money in/out:%s / %s>" % (self.name, self.filer_id, self.money_in['amount'].sum(),
-                                                             self.money_out['amount'].sum())
+                                                             self.money_out['amount'].abs().sum())
         # note sum() will be 0 if df is empty
         this_d_plus = self.money_out_resolved.loc[(self.money_out_resolved['party']=='DEMOCRAT')&
                                                   (self.money_out_resolved['proportion']>0),'proportion'].sum()
@@ -818,7 +816,6 @@ if __name__ == '__main__':
 
     print('Combine entities which are actually synonyms of a single entity')
     start = time.time()
-    #do_pac_synonyms(data_pac)
     do_ie_synonyms(data_ie)
     end = time.time()
     print(end - start)
@@ -984,32 +981,14 @@ if __name__ == '__main__':
 
     print("Resolve donations to track all donations through to final candidate/ballot issue (selected entities only)")
 
-    # define list of donors of interest
-    # these have been manually vetted to combine many spellings of donor name,
-    # but their recipients may still need some work
-    donors_interest = ['WA REALTORS PAC',
-                       'COCA COLA NORTH AMERICA',
-                       'PEPSI COLA NW BUSINESS UNIT',
-                       'DR PEPPER SNAPPLE GROUP',
-                       'ANHEUSER BUSCH CO.',
-                       'BOEING COMPANY',
-                       'BOEING EMPLOYEES CREDIT UNION',
-                       'ANDEAVOR',
-                       'PHILLIPS 66',
-                       'AMERICAN FUEL AND PETROCHEMICAL MANUFACTURERS',
-                       'BP AMERICA',
-                       'BP AMERICA EMPLOYEE PAC',
-                       'WEYERHAEUSER CO',
-                       'KOCH INDUSTRIES, INC.',
-                       'WASHINGTON EDUCATION ASSOCIATION',
-                       'MUCKLESHOOT INDIAN TRIBE',
-                       'PUYALLUP TRIBE OF INDIANS']
+    donors_interest = make_donors_interest()
 
     start = time.time()
     save_to_file(data_pac, 'data_pac.pkl')
     # for i in data_pac.all_donors.keys(): # for processing all donors
-    for i in donors_interest:
-        data_pac.all_donors[i].resolve_donations(data_pac)
+    if donors_interest:
+        for i in donors_interest:
+            data_pac.all_donors[i].resolve_donations(data_pac)
     end = time.time()
     print(end - start)
 

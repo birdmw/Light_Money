@@ -15,6 +15,7 @@ from synonyms import do_pac_synonyms2
 from donors_of_interest import make_donors_interest
 from difflib import get_close_matches
 # from fuzzywuzzy import process
+import json
 
 # use cases:
 # 1. search by contributor & summarize by party
@@ -493,22 +494,50 @@ def wrapper_get_close_matches(word,possibilities,n=1,cutoff=0.7):
         temp = ['No Match']
     return temp[0]
 
-
-def output_dataframe(this_data):
-    pass
-# this_data is a Data() object
-# main output is money_out_resolved dataframe from every donor and every candidate
-# this_data.all_donors[i].money_out_resolved
-
+def resolved_to_dataframe(data,donor_list):
+    # finds data.all_donors[i].money_out_resolved for all i in donor_list
+    # adds a column of donor names and combines all of these into a dataframe to return
+    #
+    # check if donor_list is a list
+    if not isinstance(donor_list, list):
+        if isinstance(donor_list, basestring):
+            donor_list = [donor_list]
+        else:
+            raise ValueError('combine_donors: donor_list should be string or list of strings')
+    # check if all donor_list are valid keys
+    if not set(donor_list).issubset(data.all_donors.keys()):
+        print('resolved_to_dataframe: invalid donor values on donor_list')
+        return
+    # check if money_out_resolved exists for all donor_list
+    if any([data.all_donors[i].money_out_resolved.empty for i in donor_list]):
+        print('resolved_to_dataframe: money_out_resolved is empty for values of donor_list')
+    data_out = pd.DataFrame()
+    for i in donor_list:
+        this_add = data.all_donors[i].money_out_resolved
+        this_add['donor'] = i
+        data_out = data_out.append(this_add, ignore_index=True)
+    return data_out
 
 ################################
-# Save and Load functions for intermediate data
+# JSON save and load functions
+
+def save_to_json(data, filename = 'data.json'):
+    with open(filename, "w") as write_file:
+        json.dump(data, write_file)
+
+def load_from_json(filename = 'data.json'):
+    with open(filename, "r") as read_file:
+        data = json.load(read_file)
+    return data
+
+################################
+# Pickle Save and Load functions for intermediate data
 # Usage:
 # save_to_file(data2,'data2.pkl')
 # data2 = load_from_file('data2.pkl')
 #
 
-def save_to_file(data, filename='data.pkl'):
+def save_to_pkl(data, filename='data.pkl'):
     # todo: check for valid filename
     pickle_out = open(filename, 'wb')
     pickle.dump(data, pickle_out)
@@ -516,7 +545,7 @@ def save_to_file(data, filename='data.pkl'):
     print('Saved to file: ' + filename)
 
 
-def load_from_file(filename='data.pkl'):
+def load_from_pkl(filename='data.pkl'):
     pickle_in = open(filename, "rb")
     print('Loading from file: ' + filename)
     return pickle.load(pickle_in)
@@ -984,7 +1013,16 @@ if __name__ == '__main__':
     donors_interest = make_donors_interest()
 
     start = time.time()
-    save_to_file(data_pac, 'data_pac.pkl')
+    save_to_json(data_pac.all_donors, 'data_pac.json')
+    end = time.time()
+    print(end - start)
+
+    start = time.time()
+    data_pac2 = load_from_json('data_pac.json')
+    end = time.time()
+    print(end - start)
+
+    start = time.time()
     # for i in data_pac.all_donors.keys(): # for processing all donors
     if donors_interest:
         for i in donors_interest:

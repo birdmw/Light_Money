@@ -1013,12 +1013,12 @@ if __name__ == '__main__':
     donors_interest = make_donors_interest()
 
     start = time.time()
-    save_to_json(data_pac.all_donors, 'data_pac.json')
+    #save_to_json(data_pac.all_donors, 'data_pac.json')
     end = time.time()
     print(end - start)
 
     start = time.time()
-    data_pac2 = load_from_json('data_pac.json')
+    #data_pac2 = load_from_json('data_pac.json')
     end = time.time()
     print(end - start)
 

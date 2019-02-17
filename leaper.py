@@ -5,7 +5,7 @@ import pandas as pd
 # from sodapy import Socrata
 import time as time
 from pandas.api.types import is_string_dtype
-import cPickle as pickle
+import pickle
 from collections import OrderedDict
 from manual_corrections import pac_correction
 from manual_corrections import ie_correction
@@ -14,6 +14,7 @@ from synonyms import add_synonyms
 from synonyms import do_pac_synonyms2
 from donors_of_interest import make_donors_interest
 from difflib import get_close_matches
+import yaml
 # from fuzzywuzzy import process
 import json
 
@@ -30,12 +31,16 @@ class Donor():
         self.filer_id = " "
         self.total_in = 0.0
         self.total_out = 0.0
-        self.money_in = pd.DataFrame(
-            columns=['donor', 'donor_id', 'amount'])  # only for PAC/caucus/party, empty for Individual donors
-        self.money_out = pd.DataFrame(
-            columns=["receiver", "amount", "party", "type"])  # amount, receiver, receiver type (Cand vs PAC)
-        self.money_out_resolved = pd.DataFrame(
-            columns=["receiver", "amount", "party", "type", "proportion"])  # money_out resolved to end candidates
+
+        # only for PAC/caucus/party, empty for Individual donors
+        self.money_in = pd.DataFrame(columns=['donor', 'donor_id', 'amount'])
+
+        # amount, receiver, receiver type (Cand vs PAC)
+        self.money_out = pd.DataFrame(columns=["receiver", "amount", "party", "type"])
+
+        # money_out resolved to end candidates
+        self.money_out_resolved = pd.DataFrame( columns=["receiver", "amount", "party", "type", "proportion"])
+
         self.has_resolved = False  # indicates whether money_out_resolved has been successfully computed yet
         self.pending_resolve = False # this is used to detect recursion loops in resolve_donations
 
@@ -713,7 +718,13 @@ def load_pac_data(filename, nrows=0, debug=True, name_dict = {}):
                 campdata.iloc[i,col_index] = name_dict[this_receiver_name]
 
     start = time.time()
+
+    print(start)
+    print(nrows)
+
     data2 = Data()
+
+    print('Meow')
 
     for i in range(nrows):
         this_row = campdata.iloc[i,]
@@ -815,10 +826,233 @@ def load_pac_data(filename, nrows=0, debug=True, name_dict = {}):
         print(len(data2.all_donors.keys()))
     return data2
 
+    
+
+def main_load(file_ie, file_pac):
+    donor_synonym_dict = {}  # dict of synonym:main_name for donors
+    donor_synonym_dict = do_pac_synonyms2(donor_synonym_dict)
+    data_ie = load_ie_data(file_ie)
+    data_pac = load_pac_data(file_pac,name_dict=donor_synonym_dict)
+    data_ie.sum_donations()
+    data_pac.sum_donations()
+    
+    print("Make manual corrections")
+    pac_correction(data_pac)
+    ie_correction(data_ie)
+
+    do_ie_synonyms(data_ie)
+
+    data_ie.sum_donations()
+    data_pac.sum_donations()
+
+    print('Converting data_ie.all_candidates.keys() to match data_pac.all_candidates.keys()')
+    oldname = [i for i in data_ie.all_candidates.keys() if not any(char.isdigit() for char in i)]
+    newname = [wrapper_get_close_matches(i, data_pac.all_candidates.keys()) for i in oldname]
+    cand_change = pd.DataFrame.from_items([('oldnames', oldname), ('newnames', newname)])
+    # Write out a log file of all the matches.  Cases with 'No Match' will be dropped.
+    # All cases must be manually verified for accuracy and manually fixed (e.g. William Colyer != William Cooper)
+    f = open("log-candidate name matching IE to PAC.txt", "w")
+    for i in range(len(cand_change.oldnames)):
+        f.write("%s\n" % [cand_change.iloc[i, :][0], cand_change.iloc[i, :][1]])
+    f.close()
+    # manual fix for Colyer/Cooper
+    cand_change.newnames.loc[cand_change.newnames == 'COOPER WILLIAM T'] = 'No Match'
+    # drop cases with no match - these are usually local candidates using mini-reporting with only small IE donations
+    cand_change = cand_change.loc[cand_change.newnames != 'No Match', :]
+    # update the key names using combine_candidates
+    for i in range(len(cand_change.oldnames)):
+        data_ie.combine_candidates([cand_change.iloc[i, :].oldnames], rename=cand_change.iloc[i, :].newnames)
+    # now the candidate names/keys in data_ie match the ones in data_pac
+
+    print('Finding matches between data_ie.all_donors.keys() and data_pac.all_donors.keys()')
+    oldname = data_ie.all_donors.keys()
+    newname = [wrapper_get_close_matches(i, data_pac.all_donors.keys()) for i in oldname]
+    # donor_change is a map from oldnames (in data_ie) to newnames (in data_pac)
+    donor_change = pd.DataFrame.from_items([('oldnames', oldname), ('newnames', newname)])
+    # manually fix some of the mistakes made by the automated method
+    temp = [i for i in data_ie.all_donors.keys() if i.find('ENTERPRISE WA') >= 0]
+    for i in temp:
+        donor_change.newnames.loc[donor_change.oldnames == i] = 'ENTERPRISE WASHINGTON'
+    donor_change.newnames.loc[donor_change.oldnames == 'MARATHON PETROLEM CORP SUBSIDIARY ANDEAVOR LLC'] = 'ANDEAVOR'
+    donor_change.newnames.loc[
+        donor_change.oldnames == 'NRA POLITICAL VICTORY FUND'] = 'NATIONAL RIFLE ASSOCIATION OF AMERICA'
+    donor_change.newnames.loc[donor_change.oldnames == 'WA EDUCATION ASSN PAC'] = 'WASHINGTON EDUCATION ASSOCIATION'
+    donor_change.newnames.loc[
+        donor_change.oldnames == 'WASHINGTON REALTORS POLITICAL ACTION COMMITTEE'] = 'WA REALTORS PAC'
+    donor_change.newnames.loc[donor_change.oldnames == 'FRIENDS OF ELAINE PHELPS'] = 'No Match'
+    donor_change.newnames.loc[donor_change.oldnames == 'WA FORWARD'] = 'WA FORWARD (THE LEADERSHIP COUNCIL)'
+    donor_change.newnames.loc[donor_change.oldnames == 'BUILDING INDUSTRY ASSOCIATION OF CLARK COUNTY BUILDING INDUSTRY GROUP'] = 'BUILDING INDUSTRY ASSOCIATION'
+    # write out the mapping for further manual inspection
+    f = open("log-donor name matching IE to PAC.txt", "w")
+    for i in range(len(donor_change.oldnames)):
+        f.write("%s\n" % [donor_change.iloc[i, :][0], donor_change.iloc[i, :][1]])
+    f.close()
+    # now data_ie.all_candidates.keys() are consistent with data_pac.all_candidates except ballot measures
+    # and we have a map of data_ie.all_donors.keys() to keys in data_pac.all_donors.keys()
+
+    #####
+    # Merge the IE candidates data into the PAC candidates data
+    # for each candidate in data_ie,
+    # we append its money_in to the corresponding candidate in data_pac, correcting the donor names as we go
+    # and update each donor in data_pac with the donation
+    # TODO: maybe more efficient to change the approach here to use a dictionary instead of dataframe (see donor_old_to_new below)
+    for i in cand_change.newnames:
+        print(i)
+        this_donors = data_ie.all_candidates[i].money_in.donor.copy()
+        this_name = data_ie.all_candidates[i].name
+        this_party = data_ie.all_candidates[i].party
+        this_type = data_ie.all_candidates[i].type
+        # if there is only one donor, it will return as a string, so convert to a list to use with the for statement
+        if isinstance(this_donors, basestring):
+            this_donors2 = [this_donors]
+        else:
+            this_donors2 = this_donors  # doing this to avoid the setting with copy warning on this_donors
+        # for each donor in this candidate's money_in:
+        for j in this_donors2:
+            # get the amount from donor j to candidate i
+            this_amount = data_ie.all_candidates[i].money_in.amount.loc[this_donors == j].values[0]
+            # get the new pac donor name
+            new_donor = donor_change.newnames.loc[donor_change.oldnames == j].values[0]
+            # change the old ie donor name to the new pac donor name
+            # TODO: Next line gives "set on copy of slice" warning.  Tested and it works.  How to avoid warning?
+            data_ie.all_candidates[i].money_in.donor.loc[this_donors2 == j] = new_donor
+            # if the new name is 'No Match' then this donor is not in data_pac;
+            # so don't update data_pac, give a log message showing amount, and after for loop, drop the no match rows
+            if new_donor == 'No Match':
+                print('No Match - skipped:')
+                print(j)
+                print(this_amount)
+            else:
+                # update the donor's money_out with this candidate
+                this_add = pd.DataFrame([[this_name, this_amount, this_party, this_type]],
+                                              columns=["receiver", "amount", "party", "type"])
+                data_pac.all_donors[new_donor].money_out = data_pac.all_donors[
+                                new_donor].money_out.append(this_add, ignore_index=True)
+        # drop the no match rows
+        data_ie.all_candidates[i].money_in = data_ie.all_candidates[i].money_in.loc[
+            data_ie.all_candidates[i].money_in.donor != 'No Match', :]
+        # append ie candidate's updated money_in to the pac candidate's money_in
+        data_pac.all_candidates[i].money_in = data_pac.all_candidates[i].money_in.append(
+            data_ie.all_candidates[i].money_in, ignore_index=True)
+
+    # Merge the IE initiative groups in to the PAC initiative groups
+    # Combine initiative groups into single group for or against each initiative
+    data_pac.combine_donors(donor_list=['DE-ESCALATE WA I-940'], rename='FOR 940')
+    data_pac.combine_donors(donor_list=['COPS AGAINST I-940  WA COUNCIL OF POLICE & SHERIFFS', 'COALITION FOR A SAFER WA'],
+                                                rename='AGAINST 940')
+    data_pac.combine_donors(donor_list=['CLEAN AIR CLEAN ENERGY WA'], rename='FOR 1631')
+    data_pac.combine_donors(donor_list=['NO ON 1631',
+                                        'NO ON 1631 (SPONSORED BY WESTERN STATES PETROLEUM ASSN)',
+                                         'I-1631 SPONSORED BY ASSOC OF WA BUSINESS'], rename='AGAINST 1631')
+    data_pac.combine_donors(donor_list=['YES! TO AFFORDABLE GROCERIES (SEE EMAIL FOR REST OF NAME)'], rename='FOR 1634')
+    data_pac.combine_donors(donor_list=['HEALTHY KIDS COALITION'], rename='AGAINST 1634')
+    data_pac.combine_donors(donor_list=['SAFE SCHOOLS SAFE COMMUNITIES'], rename='FOR 1639')
+    data_pac.combine_donors(donor_list=['STOP 1639 - SPONSOR SHALL NOT BE INFRINGED', 'SHALL NOT BE INFRINGED',
+                                        'SAVE OUR SECURITY NO ON I-1639',
+                                        'WASHINGTONIANS AND THE NATIONAL RIFLE ASSN FOR FREEDOM'],rename='AGAINST 1639')
+    donor_old_to_new = dict(zip(donor_change.oldnames, donor_change.newnames))
+    donor_new_to_old = dict(zip(donor_change.newnames, donor_change.oldnames))
+
+    this_ie_label_list = ['940', '1631', '1634', '1639']
+    this_pac_label_dict = {'940': ['FOR 940', 'AGAINST 940'],
+                           '1631': ['FOR 1631', 'AGAINST 1631'],
+                           '1634': ['FOR 1634', 'AGAINST 1634'],
+                           '1639': ['FOR 1639', 'AGAINST 1639']}
+    for this_ie_label in this_ie_label_list:
+        this_pac_label = this_pac_label_dict[this_ie_label]
+        # get positive (for) rows and negative (against) rows and put them in the appropriate places, converting donor names too
+        for i in range(len(data_ie.all_candidates[this_ie_label].money_in)):
+            this_row = data_ie.all_candidates[this_ie_label].money_in.iloc[i, :]
+            this_donor = this_row.donor
+            this_donor_id = this_row.donor_id
+            this_amount = this_row.amount
+            # convert old (IE) name to new (PAC) name
+            this_donor = donor_old_to_new[this_donor]
+            # skip any donors that have no match in PAC data
+            if this_donor != 'No Match':
+                if this_amount >= 0:
+                    this_add = pd.DataFrame([[this_donor, this_donor_id, this_amount]],
+                                            columns=['donor', 'donor_id', 'amount'])
+                    data_pac.all_donors[this_pac_label[0]].money_in = data_pac.all_donors[
+                        this_pac_label[0]].money_in.append(this_add, ignore_index=True)
+                else:
+                    # convert negative spend to a positive contribution to the Against side
+                    this_amount = this_amount * (-1)
+                    this_add = pd.DataFrame([[this_donor, this_donor_id, this_amount]],
+                                                columns=['donor', 'donor_id', 'amount'])
+                    data_pac.all_donors[this_pac_label[1]].money_in = data_pac.all_donors[
+                            this_pac_label[1]].money_in.append(this_add, ignore_index=True)
+
+    # mark all party organizations with their party so donor percentages reflect their party
+    data_pac.party_pac_dict = {'WA STATE DEMOCRATIC PARTY':'DEMOCRAT',
+                               'WA STATE REPUBLICAN PARTY': 'REPUBLICAN',
+                               'LOCAL DEMOCRATIC ORGS':'DEMOCRAT',
+                               'LOCAL REPUBLICAN ORGS': 'REPUBLICAN',
+                               'SENATE REPUBLICAN CAMPAIGN COMMITTEE': 'REPUBLICAN',
+                               'HOUSE REPUBLICAN ORGANIZATION COMMITTEE': 'REPUBLICAN',
+                               'HOUSE DEMOCRATIC CAUCUS CAMPAIGN COMMITTEE':'DEMOCRAT',
+                               'WASHINGTON SENATE DEMOCRATIC CAMPAIGN':'DEMOCRAT',
+                               'HARRY TRUMAN FUND':'DEMOCRAT',
+                               'REAGAN FUND': 'REPUBLICAN',
+                               'KENNEDY FUND':'DEMOCRAT',
+                               'THE LEADERSHIP COUNCIL': 'REPUBLICAN',
+                               'MAINSTREAM REPUB OF WA ST PAC': 'REPUBLICAN'}
+
+    donors_interest = ['WA REALTORS PAC',
+                           'COCA COLA NORTH AMERICA',
+                           'PEPSI COLA NW BUSINESS UNIT',
+                           'DR PEPPER SNAPPLE GROUP',
+                           'ANHEUSER BUSCH CO.',
+                           'BOEING COMPANY',
+                           'BOEING EMPLOYEES CREDIT UNION',
+                           'ANDEAVOR',
+                           'PHILLIPS 66',
+                           'AMERICAN FUEL AND PETROCHEMICAL MANUFACTURERS',
+                           'BP AMERICA',
+                           'BP AMERICA EMPLOYEE PAC',
+                           'WEYERHAEUSER CO',
+                           'KOCH INDUSTRIES, INC.',
+                           'WASHINGTON EDUCATION ASSOCIATION',
+                           'MUCKLESHOOT INDIAN TRIBE']
+
+    # for i in data_pac.all_donors.keys(): # for processing all donors
+    for i in donors_interest:
+        data_pac.all_donors[i].resolve_donations(data_pac)
+        
+    return data_pac
+    
+def IEnPAC_to_csv(fname_ie, fname_pac, configuration):
+    
+    # use yaml to load config into dictionary and pass params accordingly
+    # also contains a link to another file of synonyms
+
+    filename_IE = fname_ie
+    filename_pac = fname_pac
+
+    data = main_load(filename_IE, filename_pac)
+
+    # live in docker
+    transactions = []
+    for donor in data.all_donors.keys():
+        if data.all_donors[donor].has_resolved:
+            df_recipients = data.all_donors[donor].money_out_resolved
+            df_recipients = df_recipients.set_index(['receiver'])
+            for recipient in df_recipients.index.values.tolist():
+                transactions.append((donor, recipient, df_recipients.ix[recipient]['amount']))
+
+    df = pd.DataFrame(transactions)
+    return df
+
 
 if __name__ == '__main__':
     print("Running Main")
 
+    filename_IE = 'data\Independent_Campaign_Expenditures_and_Electioneering_Communications20181110.csv'
+    filename_pac = 'data\Contributions_to_Candidates_and_Political_Committees20181110.csv'
+
+    # data_final = main_load(filename_IE, filename_pac)
+
+    
     print('Generate synonym dictionary')
     start = time.time()
     donor_synonym_dict = {}  # dict of synonym:main_name for donors
@@ -831,9 +1065,9 @@ if __name__ == '__main__':
 
     print("Read in and process PAC/Candidate data")
     print('If there is a DtypeWarning about columns (11,23) we can ignore it')
-    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv',
-                             name_dict=donor_synonym_dict)
-    #data_pac = load_pac_data('data\small test data.csv')
+    #data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv',
+    #                         name_dict=donor_synonym_dict)
+    data_pac = load_pac_data('data\small test data.csv')
 
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
     data_ie.sum_donations()
@@ -1033,8 +1267,17 @@ if __name__ == '__main__':
     print('Done')
     # print('Example of money spent by one donor:')
     # print(data_pac.all_donors['WA REALTORS PAC'].money_out)
-    # print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
+    print(data_pac.all_donors['WA REALTORS PAC'].money_out_resolved)
 
     # save_to_file(data_pac, 'data_pac.pkl')
 
     # todo: don't let negative IE spending offset positive spending on a candidate
+
+    # [d.name, d.money_out_resolved for d in data_pac.all_donors]
+    #
+    # for d in data_pac.all_donors:
+    #     money_out = d.money_out.to_dict() # dataframe
+    #     name = d.name
+    #     money_out.to
+
+    pickle.dump(data_pac, "data_pac_x.pkl")

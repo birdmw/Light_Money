@@ -1,5 +1,6 @@
 from collections import OrderedDict
 
+
 def do_ie_synonyms(data_ie):
     # For IE candidate synonyms, must do 1631, 1634, 1639, and 940 first so that the local ones are found correctly
 
@@ -707,7 +708,7 @@ def do_pac_synonyms2(donor_synonym_dict):
                                                            'WA HOSPITAL PAC (WHPAC)',
                                                            'WHPAC / WA HOSPITAL PAC'])
 
-    donor_synonym_dict = add_synonyms(donor_synonym_dict, ['NEW DIRECTION PAC', 'NEW DIRECTION','NEW DIRECTIONS PAC'])
+    donor_synonym_dict = add_synonyms(donor_synonym_dict, ['NEW DIRECTION PAC', 'NEW DIRECTION', 'NEW DIRECTIONS PAC'])
 
     donor_synonym_dict = add_synonyms(donor_synonym_dict, ['ASSOCIATED GENERAL CONTRACTORS',
                                                            'BUILD PAC',

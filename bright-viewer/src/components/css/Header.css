@@ -1,0 +1,50 @@
+.root {
+    flex-grow: 1;
+}
+
+.grow {
+    flex-grow: 1;
+}
+
+.menuButton {
+    margin-left: -12;
+    margin-right: 20;
+}
+div.full-header {
+    width: 100%;
+    background: #3b5998;
+    height: 10vh;
+    color: white;
+    text-align: center;
+}
+
+div.bounded-header {
+    width: 70%;
+    height: 10vh;
+    margin: auto;
+    display: block;
+}
+
+input{
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 17px;
+    float: right;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    -webkit-transform: translateY(-50%);
+    -ms-transform: translateY(-50%);
+}
+
+h1.title{
+    margin: 0;
+    padding: 0;
+    float: left;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    -webkit-transform: translateY(-50%);
+    -ms-transform: translateY(-50%);
+}

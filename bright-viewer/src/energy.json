@@ -1,0 +1,24 @@
+{
+  "nodes":  [
+    {"name": "Rich Fuck'"},
+    {"name": "Rich Fuck"},
+    {"name": "Rich Fuck"},
+    {"name": "Rich Fuck"},
+    {"name": "Rich Fuck"},
+    {"name": "PAC"},
+    {"name": "PAC"},
+    {"name": "PAC"},
+    {"name": "John McCain"}
+  ],
+  "links":  [
+    {"source": 0,"target": 5,"value": 12.729},
+    {"source": 1,"target": 5,"value": 23.597},
+    {"source": 1,"target": 7,"value": 26.862},
+    {"source": 2,"target": 6,"value": 82.322},
+    {"source": 3,"target": 6,"value": 55.144},
+    {"source": 4,"target": 5,"value": 67},
+    {"source": 5,"target": 8,"value": 42},
+    {"source": 6,"target": 8,"value": 83},
+    {"source": 7, "target": 8, "value": 86}
+  ] 
+}

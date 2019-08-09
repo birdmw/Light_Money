@@ -1073,9 +1073,9 @@ if __name__ == '__main__':
     data_ie.sum_donations()
     data_pac.sum_donations()
 
-    print("Make manual corrections")
-    pac_correction(data_pac)
-    ie_correction(data_ie)
+    #print("Make manual corrections")
+    #pac_correction(data_pac)
+    #ie_correction(data_ie)
 
     print('Combine entities which are actually synonyms of a single entity')
     start = time.time()
@@ -1280,4 +1280,4 @@ if __name__ == '__main__':
     #     name = d.name
     #     money_out.to
 
-    pickle.dump(data_pac, "data_pac_x.pkl")
+    # pickle.dump(data_pac, "data_pac_x.pkl")

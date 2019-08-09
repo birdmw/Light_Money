@@ -404,6 +404,7 @@ class Data():
             print('combine_donors warning: ignoring invalid key(s) in donor_list')
             print(set(donor_list)-set(self.all_donors.keys()))
             donor_list = list(set(donor_list)&set(self.all_donors.keys()))
+            #TODO: check if donor_list is now empty; if so, we are not combining with a valid donor, so throw error and exit
         # first item in donor_list will be the new key
         first_donor = self.all_donors.pop(donor_list[0])
         new_donor = Donor()
@@ -1065,17 +1066,17 @@ if __name__ == '__main__':
 
     print("Read in and process PAC/Candidate data")
     print('If there is a DtypeWarning about columns (11,23) we can ignore it')
-    #data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv',
-    #                         name_dict=donor_synonym_dict)
-    data_pac = load_pac_data('data\small test data.csv')
+    data_pac = load_pac_data('data\Contributions_to_Candidates_and_Political_Committees20181110.csv',
+                             name_dict=donor_synonym_dict)
+    #data_pac = load_pac_data('data\small test data.csv')
 
     print("Sum donations (multiple donations from a donor to a receiver are summed)")
     data_ie.sum_donations()
     data_pac.sum_donations()
 
-    #print("Make manual corrections")
-    #pac_correction(data_pac)
-    #ie_correction(data_ie)
+    print("Make manual corrections")
+    pac_correction(data_pac)
+    ie_correction(data_ie)
 
     print('Combine entities which are actually synonyms of a single entity')
     start = time.time()
